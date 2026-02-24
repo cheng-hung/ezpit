@@ -293,11 +293,11 @@ Although an integral function can calculate the data from qminto qmax without pa
 The middle and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. 
 Consequently, the EZPDF GUI version uses Zero padding for any data added after qmax.
 
-![Pad at F(q)_Gr result.png](Pad at F(q)_Gr result.png)
+![Pad_F(q)_Gr result.png](Pad_F(q)_Gr result.png)
 
 The final figure's left plot displays the calculated S(q) (black), the fitted polynomial(red), and the resulting normalized S(q)(blue) that oscillates around 1. The right plot illustrates the pair distribution function G(r), revealing that using a high-order polynomial leads to a loss of peaks in the low-r region(red). This occurs because the high-order polynomial subtracts an excessive amount of intensity from the original calculated S(q).
 
-![Polynomial__low r in Gr.png](Polynomial__low r in Gr.png)
+![Polynomial_low_r_Gr.png](Polynomial_low_r_Gr.png)
 
 Figure d) illustrates the structure function (S(q)) derived from the experimental intensity I(q) (exp_Iq) shown in Figure a). 
 After applying a polynomial correction, S(q) oscillates around 1. 
