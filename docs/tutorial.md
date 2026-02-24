@@ -273,16 +273,25 @@ Numerical recipes by W. Press, B. Flannery, S. Teukolsky, W. Vetterling
 More detail of S(q) calculation
 ===============================
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
-So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually polyfit in python use the same method. So, you can used polyfit directrly.
+So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
+Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually polyfit in python use the same method. 
+So, you can used polyfit directrly.
 
-As an illustrative example, data from disordered cobalt oxide is presented. The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). I(q) is plotted on a logarithmic scale, which provides a much clearer visualization of the subtracted data compared to a linear scale.
-The middle panel shows the structure function, S(q), calculated from the background-subtracted data (the blue curve in the leftmost plot). This particular result arises because unwanted signals were not perfectly eliminated. By applying a polynomial correction to the calculated S(q), the peaks are adjusted to oscillate around unity (1).
-The low panel demonstrates how polynomials of two different degrees fit the calculated S(q) data. For better visualization, these polynomials were shifted by an offset of 1 and superimposed onto the S(q) plot. Notably, the high-degree polynomial (order 15.0, blue) exhibits significant deviations from the appropriate degree (order 7.80, red), particularly in the low-q region.
+As an illustrative example, data from disordered cobalt oxide is presented. 
+The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). 
+I(q) is plotted on a logarithmic scale, which provides a much clearer visualization of the subtracted data compared to a linear scale.
+The middle panel shows the structure function, S(q), calculated from the background-subtracted data (the blue curve in the leftmost plot). 
+This particular result arises because unwanted signals were not perfectly eliminated. By applying a polynomial correction to the calculated S(q), 
+the peaks are adjusted to oscillate around unity (1). The low panel demonstrates how polynomials of two different degrees fit the calculated S(q) data. 
+For better visualization, these polynomials were shifted by an offset of 1 and superimposed onto the S(q) plot. 
+Notably, the high-degree polynomial (order 15.0, blue) exhibits significant deviations from the appropriate degree (order 7.80, red), particularly in the low-q region.
 
-![S(q) calculation_polynomials.png](S(q) calculation_polynomials.png)
+![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
 
-The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), which requires padding data from 0 to qmin​ (red) and after qmax (blue)​. Although an integral function can calculate the data from qmin​ to qmax​ without padding, the process is much slower than the IFFT method.
-The middle and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. Consequently, the EZPDF GUI version uses Zero padding for any data added after qmax​.
+The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), which requires padding data from 0 to qmin (red) and after qmax (blue). 
+Although an integral function can calculate the data from qminto qmax without padding, the process is much slower than the IFFT method.
+The middle and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. 
+Consequently, the EZPDF GUI version uses Zero padding for any data added after qmax.
 
 ![Pad at F(q)_Gr result.png](Pad at F(q)_Gr result.png)
 
