@@ -321,7 +321,7 @@ Under “File”, “Open” each file, or selected files or files in folder can
 
 Under “View”, Changes the GUI theme from Light to Dark Mode.
 
-![Dark Mode of EZPDF and EZPDF Plot.png](Dark Mode of EZPDF and EZPDF Plot.png)
+![EZPDF__EZPDF_plot_Darkmode.png](EZPDF__EZPDF_plot_Darkmode.png)
 
 Clicking the icon launches the EZPDF plot window as a pop-up
 
