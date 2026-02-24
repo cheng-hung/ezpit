@@ -79,9 +79,9 @@ the atomic positions in the input .xyz coordinate file.
 
 ![img_6.png](img_6.png)
 
-When i = j, the Debye formula will be:
+ The total coherent scattering intensity, I(q), is theoretically defined as the sum of two fundamental components: self-scattering (i = j) and distinct-pair scattering (i ≠ j), a relationship clearly illustrated by the provided image using a three-element system (A, B, C).
 
-![img_7.png](img_7.png)
+![I(q) calculation_Basic equation_example.png](I%28q%29%20calculation_Basic%20equation_example.png)
 
 If sample is water (H2O,  H1, H2, O1), I(q) = (fH1H1 + fH2H2 + fO1O1)2 = (2fH2 + fO2) 
 
