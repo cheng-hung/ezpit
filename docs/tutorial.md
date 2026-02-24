@@ -301,5 +301,58 @@ the pair distribution functions are identical.
 ![img_41.png](img_41.png)
 
 
+GUI of EZPDF
+=============
+The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q), F(q), G(r). the loaded fil, necessary parameters, smooth function are shown. Also, “Open in New Graphs” allows new graph when open each file.
+Load file, folder, saved project file which as parameters and file path.
+View tab show “Dark Mode”.
+Select several files and delete all.
+
+![EZPDF_GUI.png](EZPDF_GUI.png)
+
+EZPDF panel
+===========
+
+Under “File”, “Open” each file, or selected files or files in folder can be loaded.
+“Opne Project” A saved project file” can be loaded.
+“Save Project” The parameters of your current working files can be saved as a project file
+
+![EZPDF_panel_fileload.png](EZPDF_panel_fileload.png)
+
+Under “View”, Changes the GUI theme from Light to Dark Mode.
+
+![EZPDF_panel_Darkmode.png](EZPDF_panel_Darkmode.png)
+
+Clicking the icon launches the EZPDF plot window as a pop-up
+
+![EZPDF_panel_2Dgraph_icon.png](EZPDF_panel_2Dgraph_icon.png)
+
+The picture show EZPDF Plot and it shows I(q) (black) including background data (red), and background subtracted data (blue), S(q) with calculated S(q)(black) including polynomial data (red) and polynomial corrected S(q)(blue), F(q) (blue) and smoothed F(q) (black), and G(r)(blue) and G(r) (black) from smoothed F(q).
+
+“Lock graph” lock the parameter on the graph. All parameter in “Lock graph” will not be change even though parameters is changed in EZPDF parameter. So. You compare data with different data which have different parameters.
+Toggles (I(q), S(q), F(q), G(r)) shown in the down right corner) shows specific data only. 
+
+![EZPDF_plot.png](EZPDF_plot.png)
+
+The picture shows “Dark Mode” of EZPDF and EZPDF Plot.
+
+![Dark Mode of EZPDF and EZPDF Plot.png](Dark Mode of EZPDF and EZPDF Plot.png)
+
+“Save data” saves processed data for experimental data or calculated data from input xyz model data. “Save figure” (not shown) saves EZPDDF Plot as PNG, JPEG, SVG, PDF.
+EZPDF plot window: options:
+
+![EZPDF_panel_save_plot option.png](EZPDF_plot_save_plot option.png)
+
+EZPDF plot window: multiple plot: 
+X Offset and Y Offset are available.
+Selective plotting is also available.
+
+![EZPDF_plot_offset_miltiplot.png](EZPDF_plot_offset_miltiplot.png)
+
+ Clicking the 'Delete Selected' button will trigger a 'Confirm Deletion' prompt. You can then select either 'Yes' to proceed or 'No' to cancel.
+
+![Delete Selected.png](Delete Selected.png)
+
+
 
 
