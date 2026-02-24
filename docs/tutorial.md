@@ -275,7 +275,7 @@ More detail of S(q) calculation
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
 So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
 Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually Numpy _polyfit_ in python use the same method. 
-So, you can used polyfit directrly.
+So, you can used Numpy _polyfit_ directrly.
 
 As an illustrative example, data from disordered cobalt oxide is presented. 
 The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). 
