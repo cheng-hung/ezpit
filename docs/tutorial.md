@@ -338,7 +338,7 @@ The picture shows “Dark Mode” of EZPDF and EZPDF Plot.
 ![EZPDF__EZPDF_plot_Darkmode.png](EZPDF__EZPDF_plot_Darkmode.png)
 
 “Save data” saves processed data for experimental data or calculated data from input xyz model data. “Save figure” (not shown) saves EZPDDF Plot as PNG, JPEG, SVG, PDF.
-EZPDF plot window: options:
+EZPDF plot window options
 
 ![EZPDF_plot_save_plot option.pngg](EZPDF_plot_save_plot option.png)
 
