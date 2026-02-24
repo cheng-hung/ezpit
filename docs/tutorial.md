@@ -321,7 +321,7 @@ Under “File”, “Open” each file, or selected files or files in folder can
 
 Under “View”, Changes the GUI theme from Light to Dark Mode.
 
-![EZPDF_panel_Darkmode.png](EZPDF_panel_Darkmode.png)
+![Dark Mode of EZPDF and EZPDF Plot.png](Dark Mode of EZPDF and EZPDF Plot.png)
 
 Clicking the icon launches the EZPDF plot window as a pop-up
 
@@ -341,7 +341,7 @@ The picture shows “Dark Mode” of EZPDF and EZPDF Plot.
 “Save data” saves processed data for experimental data or calculated data from input xyz model data. “Save figure” (not shown) saves EZPDDF Plot as PNG, JPEG, SVG, PDF.
 EZPDF plot window: options:
 
-![EZPDF_panel_save_plot option.png](EZPDF_plot_save_plot option.png)
+![EZPDF_plot_save_plot option.pngg](EZPDF_plot_save_plot option.png)
 
 EZPDF plot window: multiple plot: 
 X Offset and Y Offset are available.
