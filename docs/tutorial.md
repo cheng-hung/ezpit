@@ -274,7 +274,7 @@ More detail of S(q) calculation
 ===============================
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
 So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
-Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually polyfit in python use the same method. 
+Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually Numpy _polyfit_ in python use the same method. 
 So, you can used polyfit directrly.
 
 As an illustrative example, data from disordered cobalt oxide is presented. 
