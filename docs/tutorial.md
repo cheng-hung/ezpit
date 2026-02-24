@@ -347,9 +347,10 @@ Selective plotting is also available.
 
 ![EZPDF_plot_offset_miltiplot.png](EZPDF_plot_offset_miltiplot.png)
 
- Clicking the 'Delete Selected' button will trigger a 'Confirm Deletion' prompt. You can then select either 'Yes' to proceed or 'No' to cancel.
+Clicking the 'Delete Selected' button will trigger a 'Confirm Deletion' prompt. You can then select either 'Yes' to proceed or 'No' to cancel.
 
-![Delete Selected.png](Delete Selected.png)
+![Delete Selected.png](Delete%20Selected.png)
+
 
 
 
