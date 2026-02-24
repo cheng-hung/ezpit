@@ -320,6 +320,7 @@ Under “File”, “Open” each file, or selected files or files in folder can
 ![EZPDF_panel_fileload.png](EZPDF_panel_fileload.png)
 
 Under “View”, Changes the GUI theme from Light to Dark Mode.
+
 ![EZPDF_panel_Darkmode.png](EZPDF_panel_Darkmode.png)
 
 Clicking the icon launches the EZPDF plot window as a pop-up
