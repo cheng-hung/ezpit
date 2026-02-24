@@ -196,16 +196,6 @@ Ions in 5IrC_r5a-1Ir_ion.xyz
 
 ![img_22.png](img_22.png)
 
-qdamp: The parameter that models the exponential decay of the PDF peaks caused by the finite q-resolution. 
-PDF peaks are attenuated by a Gaussian envelope due to q-resolution effects. The envelope has the following form.
-
-![img_23.png](img_23.png)
-
-The impact of qdamp on the PDF spectrum can be observed in the following figure.
-
-![img_24.png](img_24.png)
-
-
 Calculating Compton scattering pattern
 ======================================
 
