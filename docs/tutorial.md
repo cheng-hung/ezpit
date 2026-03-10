@@ -328,9 +328,7 @@ View tab show “Dark Mode”.
 Select several files and delete all.
 
 ![EZPDF_GUI.png](EZPDF_GUI.png)
-
 EZPDF panel
-===========
 
 Under “File”, “Open” each file, or selected files or files in folder can be loaded.
 “Opne Project” A saved project file” can be loaded.
