@@ -370,14 +370,15 @@ Clicking the 'Delete Selected' button will trigger a 'Confirm Deletion' prompt. 
 
 
 Prerequisites
-==============
-Python 3.11+: The application relies on features and syntax introduced in Python 3.11.
-Architecture: Developed and validated on Windows 64-bit. 32-bit environments and non-Windows platforms (macOS/Linux) are currently untested.
+=============
+Python 3.11: The application utilizes syntax and features introduced in Python 3.11.
+Note: EZPDF has been specifically validated on 3.11; compatibility with newer versions (3.12+) is currently untested.
+Operating System: Windows (64-bit).
+Note: 32-bit environments, macOS, and Linux are currently untested.
 
 Dependencies
-The primary constraint for this software is PySide6. 
-Before proceeding with the installation, verify that your specific Python version is supported by PySide6 to avoid environment conflicts.
-
+Core Framework: PySide6 is the primary dependency for the GUI.
+Compatibility Check: Before installation, please ensure your Python environment aligns with PySide6 version requirements to prevent library conflicts.
 ![Reqired software1.png](Reqired%20software1.png)
 ![Reqired software2.png](Reqired%20software2.png)
 ![Reqired software3.png](Reqired%20software3.png)
