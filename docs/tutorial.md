@@ -320,7 +320,7 @@ the pair distribution functions are identical.
 ![img_41.png](img_41.png)
 
 
-GUI of EZPDF ----------testttt
+GUI of EZPDF 
 =============
 The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q), F(q), G(r). the loaded fil, necessary parameters, smooth function are shown. Also, “Open in New Graphs” allows new graph when open each file.
 Load file, folder, saved project file which as parameters and file path.
