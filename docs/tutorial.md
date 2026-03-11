@@ -369,6 +369,16 @@ Clicking the 'Delete Selected' button will trigger a 'Confirm Deletion' prompt. 
 ![Delete Selected.png](Delete%20Selected.png)
 
 
+Prerequisites
+==============
+Python 3.11+: The application relies on features and syntax introduced in Python 3.11.
+Architecture: Developed and validated on Windows 64-bit. 32-bit environments and non-Windows platforms (macOS/Linux) are currently untested.
 
+Dependencies
+The primary constraint for this software is PySide6. 
+Before proceeding with the installation, verify that your specific Python version is supported by PySide6 to avoid environment conflicts.
 
+![Reqired software1.png](Reqired%20software1.png)
+![Reqired software2.png](Reqired%20software2.png)
+![Reqired software3.png](Reqired%20software3.png)
 
