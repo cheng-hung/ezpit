@@ -325,7 +325,7 @@ GUI of EZPDF
 The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q), F(q), G(r). the loaded fil, necessary parameters, smooth function are shown. Also, “Open in New Graphs” allows new graph when open each file.
 Load file, folder, saved project file which as parameters and file path.
 View tab show “Dark Mode”.
-Select several files and delete all. **A file drag-and-drop interface and a deleted file recovery function(Undo Delete) have been added.** 
+Select several files and delete all. **A file drag-and-drop interface and a deleted file recovery function (Undo Delete) have been added.** 
 
 ![EZPDF_GUI.png](EZPDF_GUI.png)
 EZPDF panel
