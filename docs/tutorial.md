@@ -326,9 +326,9 @@ The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q),
 Load file, folder, saved project file which as parameters and file path.
 View tab show “Dark Mode”.
 Select several files and delete all. **File drag-and-drop and deleted file recovery (Undo Delete) functions have been added.** 
-
-![EZPDF_GUI.png](EZPDF_GUI.png)
 EZPDF panel
+![EZPDF_GUI.png](EZPDF_GUI.png)
+
 
 Under “File”, “Open” each file, or selected files or files in folder can be loaded.
 “Opne Project” A saved project file” can be loaded.
