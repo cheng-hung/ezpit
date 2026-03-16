@@ -5,7 +5,7 @@ EZPIT is a simulation-based structural refinement software developed on the foun
 Its primary objective is to optimize atomic models by calculating theoretical scattering signals and fitting them to experimental Pair Distribution Function (PDF) data.
 The EZPIT software is still under development and will be shared soon.
 
-Publish EZpit
+Publish EZPDF/EZPIT
 Author: Gihan Kwon
 
 Contributors:
