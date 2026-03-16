@@ -6,6 +6,7 @@ Its primary objective is to optimize atomic models by calculating theoretical sc
 The EZPIT software is still under development and will be shared soon.
 
 Publish EZPDF/EZPIT
+
 Author: Gihan Kwon
 
 Contributors:
