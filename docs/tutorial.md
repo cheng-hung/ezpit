@@ -298,7 +298,6 @@ Notably, the high-degree polynomial (order 15.0, blue) exhibits significant devi
 
 ![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
 
-
 The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), which requires padding data from 0 to qmin (red) and after qmax (blue). 
 Although an integral function can calculate the data from qminto qmax without padding, the process is much slower than the IFFT method.
 The middle and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. 
