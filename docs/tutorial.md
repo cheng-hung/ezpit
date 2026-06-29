@@ -234,6 +234,9 @@ Also, several important functions in "loadsaver.py" are explained in terms of th
 
 ![img_33.png](img_33.png)
 
+
+
+
 Calculating S(q), F(q), G(r) from experimental I(q)
 ===================================================
 Figure a) displays various experimental and analytical data points: the experimental intensity I(q) (denoted as exp_Iq), 
@@ -275,7 +278,7 @@ More detail of S(q) calculation
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
 So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
 Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually Numpy _polyfit_ in python use the same method. 
-So, you can used Numpy _polyfit_ directrly.
+So, you can used Numpy polyfit directrly.
 
 As an illustrative example, data from disordered cobalt oxide is presented. 
 The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). 
@@ -287,6 +290,7 @@ For better visualization, these polynomials were shifted by an offset of 1 and s
 Notably, the high-degree polynomial (order 15.0, blue) exhibits significant deviations from the appropriate degree (order 7.80, red), particularly in the low-q region.
 
 ![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
+
 
 The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), which requires padding data from 0 to qmin (red) and after qmax (blue). 
 Although an integral function can calculate the data from qminto qmax without padding, the process is much slower than the IFFT method.
