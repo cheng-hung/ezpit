@@ -196,6 +196,13 @@ Ions in 5IrC_r5a-1Ir_ion.xyz
 
 ![img_22.png](img_22.png)
 
+
+
+
+
+
+
+
 Calculating Compton scattering pattern
 ======================================
 
