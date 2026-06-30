@@ -280,6 +280,7 @@ Numerical recipes by W. Press, B. Flannery, S. Teukolsky, W. Vetterling
 
 ![img_38-1.png](img_38-1.png)
 
+
 More detail of S(q) calculation
 ===============================
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
@@ -319,6 +320,8 @@ Aside from a difference in scaling, both S(q) representations are identical.
 Figure e) presents the reduced structure function (F(q)) derived from S(q) in Figure d), where F(q) oscillates around 0. 
 For comparison, F(q) (xpdfsute_F(q)) from xPDFsuite is also shown. Apart from a difference in scaling, 
 both versions of F(q) are identical.
+
+
 
 ![img_40.png](img_40.png)
 
