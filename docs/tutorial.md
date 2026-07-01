@@ -246,31 +246,25 @@ Also, several important functions in "loadsaver.py" are explained in terms of th
 
 Calculating S(q), F(q), G(r) from experimental I(q)
 ===================================================
-Figure a) displays various experimental and analytical data points: the experimental intensity I(q) (denoted as exp_Iq), 
-the scaled background (represented as nn1*bkg), the background-subtracted experimental intensity I(q) 
-(labeled as bkg subtracted Iq), Compton scattering (Compton_scat), the mean square of the form factor 
-(mean_square_fi, <f^2>), the square of the mean form factor (square_mean_fi, <f>^2), and 
-the summation of Compton scattering and the mean square of the form factor.
+Figure displays the experimental intensity I(q) (denoted as Exp(Raw), the scaled background (represented as Bkg*Scale), 
+the background-subtracted experimental intensity (Net I(q))
 
-![img_36.png](img_36.png)
+![img_36 .png](img_36.png)
 
-Figure b) presents the background-subtracted experimental intensity I(q) (denoted as bkg subtracted Iq), 
-the mean square of the form factor (mean_square_fi, <f^2>), and the square of the mean form factor (square_mean_fi, <f>^2).
-
+Figure presents the background-subtracted experimental intensity (Net I(q))
 ![img_37.png](img_37.png)
 
-Figure c) exhibits the structure function (not normalized S(q)) derived from the experimental intensity I(q) 
-(exp_Iq) in Figure a), along with S(q) (xpdfsute_S(q)) from xPDFsuite for comparison. 
-The not normalized S(q) shows an increase in intensity as a function of increasing q (1/Å), 
-which is attributed to the imperfection of all subtraction and the instrumental limitations. To normalize the oscillation of S(q) around 1, 
-a form of correction is necessary. EZPDF employs a polynomial correction, similar to the approach taken by xPDFsuite.
+Figure exhibits the structure function (not normalized S(q) = Standard S(q)) derived from the experimental intensity I(q) 
+(Net I(q) in the previous Figure. The not normalized S(q) shows an increase in intensity as a function of increasing q (1/Å), 
+which is attributed to the imperfection of all subtraction and the instrumental limitations. 
+To bring the oscillation of S(q) around 1, a form of correction is necessary.
+EZPDF employs a polynomial correction, similar to the approach taken by xPDFsuite. the normalized S(q) (=Poly corrected S(q)) is oscillated around 1.
 
 ![img_38.png](img_38.png)
 
 As an example of polynomial correction of S(q), polynomial order is used instead of r-poly, which is adopted in xPDFsuite.
-The black line represents the "Experimental S(q)" which is not corrected by polynomial.
-The red line denotes the calculated polynomial for the black line.
-The blue line illustrates the S(q) after subtracting the red line from the black line.
+The blue line represents the  The not normalized S(q) and the orange line denotes the calculated polynomial for the blue line.
+The blue line (Poly corrected s(q) in right Figure) illustrates the S(q) after subtracting the orange line.
 To obtain a polynomial function, a Vandermonde matrix with a least squares fit is utilized here.
 Reference materials:
 https://m.youtube.com/watch?v=BExDXaFOjF4
@@ -286,7 +280,11 @@ More detail of S(q) calculation
 Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
 So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
 Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually Numpy _polyfit_ in python use the same method. 
-So, you can used Numpy polyfit directrly.
+So, you can used Numpy polyfit directrly. 
+The experimental structure function S(q) is obtained from the background-subtracted intensity using an ad hoc X-ray normalization 
+(PDFgetX3-style; Juhás et al., J. Appl. Cryst. 46, 560 (2013)):
+
+![Experimental S(q) calculation.png](Experimental S(q) calculation.png)
 
 As an illustrative example, data from disordered cobalt oxide is presented. 
 The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). 
