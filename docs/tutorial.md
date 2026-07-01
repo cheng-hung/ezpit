@@ -329,27 +329,15 @@ This occurs because the high-order polynomial subtracts an excessive amount of i
 
 ![Polynomial_low_r_Gr.png](Polynomial_low_r_Gr.png)
 
-Figure d) illustrates the structure function (S(q)) derived from the experimental intensity I(q) (exp_Iq) shown in Figure a). 
-After applying a polynomial correction, S(q) oscillates around 1. 
 For comparison, S(q) (xpdfsute_S(q)) obtained from xPDFsuite is also displayed. 
-Aside from a difference in scaling, both S(q) representations are identical.
-
-![img_39.png](img_39.png)
-
-Figure e) presents the reduced structure function (F(q)) derived from S(q) in Figure d), where F(q) oscillates around 0. 
+Both S(q) representations are quite similar except low q in S(q).
+the middle figure presents the reduced structure function (F(q)) derived from S(q) in Figure d), where F(q) oscillates around 0. 
 For comparison, F(q) (xpdfsute_F(q)) from xPDFsuite is also shown. Apart from a difference in scaling, 
 both versions of F(q) are identical.
+The bottom figure displays pair distribution functions (integral-G(r), iff-G(r)) derived from F(q) in the middle figure. Using inverse fast Fourier transform (ifft). 
+For comparison, G(r) (xpdfsute_G(r)) from xPDFsuite is also shown. the pair distribution functions are identical.
 
-
-
-![img_40.png](img_40.png)
-
-Figure f) displays pair distribution functions (integral-G(r), iff-G(r)) derived from F(q) in Figure e) 
-using an integral function and inverse fast Fourier transform (ifft). 
-For comparison, G(r) (xpdfsute_G(r)) from xPDFsuite is also shown. Aside from a difference in scaling, 
-the pair distribution functions are identical.
-
-![img_41.png](img_41.png)
+![img_s(q)_f(q)_g(r)_comparison.png](img_s%28q%29_f%28q%29_g%28r%29_comparison.png)
 
 
 GUI of EZPDF 
