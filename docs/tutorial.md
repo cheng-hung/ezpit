@@ -293,7 +293,21 @@ The middle panel shows the structure function, S(q), calculated from the backgro
 This particular result arises because unwanted signals were not perfectly eliminated. By applying a polynomial correction to the calculated S(q), 
 the peaks are adjusted to oscillate around unity (1). The low panel demonstrates how polynomials of two different degrees fit the calculated S(q) data. 
 For better visualization, these polynomials were shifted by an offset of 1 and superimposed onto the S(q) plot. 
-Notably, the high-degree polynomial (order 15.0, blue) exhibits significant deviations from the appropriate degree (order 7.80, red), particularly in the low-q region.
+Notably, the high-degree polynomial (order 20.0, blue) exhibits significant deviations from the appropriate degree (order 7.208, red), particularly in the low-q region.
+EZPDF constructs the polynomial fit explicitly from the Vandermonde matrix and numpy.linalg.lstsq rather than calling numpy.polyfit; the two are mathematically equivalent, 
+but the explicit formulation gives direct control over the design matrix used for the non-integer-order interpolation described below. 
+This error component is subsequently subtracted from the raw data to yield the final structure factor. 
+To provide finer control over this normalization, the software extends this approach to support non-integer polynomial orders through a linear interpolation strategy. 
+When a real number is specified as the target polynomial order (poly_order), the system first calculates the correction functions for the nearest lower integer order (poly_lo) 
+and the nearest higher integer order (poly_hi) using the Vandermonde-based least-squares method described above. 
+Subsequently, weights are calculated to determine the contribution of each boundary order to the final result, 
+where the fractional part of the target order determines the weight for the higher order (w_hi = poly_order – lo), 
+and the remaining value determines the weight for the lower order (w_lo = 1 – w_hi). 
+The final continuous correction function corresponding to the real-valued order is yielded by linearly combining the results 
+from the two integer orders according to the formula P(q)Polynomial_for_sq = w_lo × P(q)poly_lo + w_hi × P(q)poly_hi. 
+For example, when utilizing a non-integer target polynomial order of 7.208, the interpolation is based on the closest integer boundaries of 7.0 and 8.0. 
+The weight assigned to the higher order (w_hi) is the fractional part (0.208), and the remaining weight for the lower order (w_lo) is 0.792. 
+Consequently, the final interpolated polynomial correction function is derived as a linear combination given by P(q)7.208 = 0.792 × P(q)7 + 0.208 × P(q)8.
 
 ![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
 
