@@ -403,3 +403,35 @@ Compatibility Check: Before installation, please ensure your Python environment 
 ![Reqired software2.png](Reqired%20software2.png)
 ![Reqired software3.png](Reqired%20software3.png)
 
+
+Smooth function: WH_smooth_GUI
+==============================
+A common challenge in pair distribution function (PDF) analysis arises when the scattering signal of interest is weak relative to, 
+or comparable in magnitude with, the background, as is typical for low-concentration samples, thin films, dilute solutions, 
+in situ cell measurements, or operando electrochemical setups. In such cases, even small inaccuracies in the background measurement or 
+in the determination of the background scaling factor α can leave residual sharp features, glitches, 
+or oscillatory artifacts in the background-subtracted intensity I(q) − α × IBkg(q). These residuals are often confined to narrow q intervals but, 
+if left untreated, propagate into the Fourier transform and contaminate the resulting G(r) with spurious peaks or low-r ripples. 
+To address this issue without distorting the genuine scattering signal elsewhere, a dedicated range-selective processing utility, 
+WH_smooth_GUI, has been developed as a standalone companion tool to EZPDF. The four available modes are: (i) Whittaker–Henderson (WH) smoothing, 
+which suppresses high-frequency noise while preserving the underlying scattering envelope; (ii) Linear interpolation, which replaces a q interval with
+a straight line between its boundary points and is well-suited for removing very narrow, isolated artifacts; (iii) Automatic cubic-spline interpolation, 
+which fits a natural cubic spline through 2N anchor points sampled symmetrically outside the targeted q interval, providing a smooth baseline restoration that follows the local trend of the data; 
+and (iv) Manual cubic-spline interpolation, in which the user directly clicks on the graph to define anchor points, giving full control when the residual feature is irregular or 
+when the automatic methods fail to capture the desired baseline shape. All spline-based modes are performed in log-space when the data are strictly positive, 
+so the reconstructed segment correctly follows the exponentially decaying nature of typical scattering profiles. Independent λ, polynomial order, and blend-width parameters can be assigned to every q range, 
+allowing the processing strength and the cosine-taper transition width to be tailored to the local character of the data. At each range boundary, a cosine-taper blending function ensures a smooth, 
+artifact-free transition between the processed segment and the original data, preventing the introduction of discontinuities.
+Figure  shows the GUI of the standalone WH Range Smoother utility applied to an experimental dataset. The tool performs processing on the background-subtracted intensity I(q) − α × IBkg(q), 
+using a scale factor α = 2.17 to balance the sample and background contributions. 
+WH smoothing is applied independently across three user-defined q ranges: q = 1.9 – 2.3 / Å with λ = 10,000,000 (blend = 14 points), q = 2.3 – 8.0 / Å with λ = 1,000 (blend = 20), and q = 10 – 25 / Å with λ = 1,000 (blend = 20). 
+The cosine-taper blend at each boundary preserves continuity with the unmodified regions of the data, as confirmed by the residual curve in the lower panel, where ΔI ≈ 0 outside the shaded smoothing windows. 
+The use of a per-range λ parameter is essential because the local character of the scattering signal differs significantly across the q axis: at low q (1.9 – 2.3 / Å) the data contain sharp, 
+narrow features that require very strong smoothing to suppress, whereas at higher q a moderate λ is sufficient to remove statistical noise without distorting the underlying scattering envelope. 
+The reference curve (scaled by a factor of 10) overlaid on the main panel serves as an independent validation that the smoothed result faithfully reproduces the expected scattering profile across the entire q range.
+
+Graphical user interface of the standalone WH Range Smoother utility. (Top) Overlaid curves on a logarithmic I(q) scale: raw sample intensity I(q) (black), scaled background α × IBkg(q) (blue), 
+background-subtracted intensity I(q) − α × IBkg(q) (red), the WH smoothed result (purple), and a scaled reference curve (green dashed) for comparison. Yellow shaded bands indicate the user-defined q ranges over which smoothing is applied. 
+The inset (green rectangle) expands the q = 1.9–2.3 / Å region. (Bottom) Difference curve ΔI(q) = I(q) – ISmoothed(q).
+
+![WH_smooth_GUI-5.jpg](WH_smooth_GUI-5.jpg)
