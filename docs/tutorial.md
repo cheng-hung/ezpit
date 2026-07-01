@@ -289,7 +289,7 @@ The experimental structure function S(q) is obtained from the background-subtrac
 As an illustrative example, data from disordered cobalt oxide is presented. 
 The top panel displays the scattering intensities for the cobalt oxide sample(black), the background (red), and the resulting background-subtracted data(blue). 
 I(q) is plotted on a logarithmic scale, which provides a much clearer visualization of the subtracted data compared to a linear scale.
-The middle panel shows the structure function, S(q), calculated from the background-subtracted data (the blue curve in the leftmost plot). 
+The middle panel shows the structure function, S(q), calculated from the background-subtracted data. 
 This particular result arises because unwanted signals were not perfectly eliminated. By applying a polynomial correction to the calculated S(q), 
 the peaks are adjusted to oscillate around unity (1). The low panel demonstrates how polynomials of two different degrees fit the calculated S(q) data. 
 For better visualization, these polynomials were shifted by an offset of 1 and superimposed onto the S(q) plot. 
@@ -311,14 +311,21 @@ Consequently, the final interpolated polynomial correction function is derived a
 
 ![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
 
-The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), which requires padding data from 0 to qmin (red) and after qmax (blue). 
-Although an integral function can calculate the data from qminto qmax without padding, the process is much slower than the IFFT method.
-The middle and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. 
+The top graph in the second set depicts the data length required before performing an Inverse Fast Fourier Transform (IFFT), 
+which requires padding data from 0 to qmin (red) and after qmax (blue). 
+Although an integral function can calculate the data from qmin to qmax without padding, the process is much slower than the IFFT method.
+The second, third, and bottom graphs evaluate how various padding methods after qmax influence the resulting G(r), 
+showing no significant difference between Zero, Constant, and Decay padding for distances above 1 Å. 
 Consequently, the EZPDF GUI version uses Zero padding for any data added after qmax.
+
 
 ![Pad_F(q)_Gr result.png](Pad_F(q)_Gr result.png)
 
-The final figure's left plot displays the calculated S(q) (black), the fitted polynomial(red), and the resulting normalized S(q)(blue) that oscillates around 1. The right plot illustrates the pair distribution function G(r), revealing that using a high-order polynomial leads to a loss of peaks in the low-r region(red). This occurs because the high-order polynomial subtracts an excessive amount of intensity from the original calculated S(q).
+How  polynomial subtraction in S(q) affect on G(r):
+The  top figure display how two different polynomial orders are superimposed on S(q). 
+The bottom plot illustrates the pair distribution function G(r), revealing that using a high-order polynomial leads to a loss of peaks in the low-r region(red). 
+This occurs because the high-order polynomial subtracts an excessive amount of intensity from the original calculated S(q).
+
 
 ![Polynomial_low_r_Gr.png](Polynomial_low_r_Gr.png)
 
