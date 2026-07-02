@@ -11,8 +11,8 @@ https://algotom.readthedocs.io/en/latest/toc/section4/section4_1.html
 
 ***** To obtain I(q), S(q), F(q), G(r) from input xyz coordinates, or to derive S(q), F(q), G(r) from experimental I(q) 
 or Compton scattering patterns, please refer to the files located in the """examples""" directory. ******
-
 Sooner or later, we will incorporate various fitting functions to assess input models using experimental data.
+
 
 Input file
 ==========
@@ -79,18 +79,17 @@ the atomic positions in the input .xyz coordinate file.
 
 ![img_6.png](img_6.png)
 
- The total coherent scattering intensity, I(q), is theoretically defined as the sum of two fundamental components: self-scattering (i = j) and distinct-pair scattering (i ≠ j), a relationship clearly illustrated by the provided image using a three-element system (A, B, C).
+The total coherent scattering intensity, I(q), is theoretically defined as the sum of two fundamental components: 
+self-scattering (i = j) and distinct-pair scattering (i ≠ j), a relationship clearly illustrated by the provided image using a three-element system (A, B, C).
 
 ![I(q) calculation_Basic equation_example.png](I%28q%29%20calculation_Basic%20equation_example.png)
 
-If sample is water (H2O,  H1, H2, O1), I(q) = (fH1H1 + fH2H2 + fO1O1)2 = (2fH2 + fO2) 
-
+If sample is water (H2O,  H1, H2, O1), I(q) = (fH1H1 + fH2H2 + fO1O1)2 = (2fH2 + fO2)
 When q = zero (0), sin(qrij)/(qrij) = 1, So, the Debye formula will be:
 
 ![img_8.png](img_8.png)
 
 If sample is water (H2O,  H1, H2, O1), I(q) = (fH1 + fH2 + fO1)2 = (2fH + fO)2 
-
 One possible way to explain this is:
 The .xyz coordinate file contains the positions of the atoms in a molecule. 
 For example, if the .xyz coordinate file has 
@@ -144,8 +143,8 @@ PDF spectrum with different rsetp.
 
 The IFFT method is more efficient than the integral method, but it needs 
 the relation between q (reciprocal space) and r (real space) to obtain 
-a correct realspace value for G(r). After applying IFFT, the imaginary part of G(r)
-was extracted. Also, the real space had to be adjusted with
+a correct real-space value for G(r). After applying IFFT, the imaginary part of G(r)
+was extracted. In addition, the real-space axis had to be adjusted with
 
 total_point = int(2 * 3.14159 / (rstep * qstep))
 rfine = np.arange(total_point) * rstep
@@ -157,10 +156,11 @@ can be any positive integer. However, if the function F(q) does not start from z
 then it is necessary to add a zero value (or an extrapolated or interpolated value) 
 for F(q) between zero and qmin before applying the IFFT.
 
+
 ![img_15.png](img_15.png)
 
 The following figure illustrates how to pad the data by interpolation and 
-extrapolation when the line below qmin is zero. This technique can help to
+extrapolation when the line below qmin is zero. This technique helps to
 avoid artifacts and improve the quality of the inversion results. 
 The padding is done by fitting a straight line (y = ax or y=ax +b) to 
 the data points and extending it beyond the original range of qmin and qmax.
@@ -169,9 +169,9 @@ In this code, “interpolate.interp1d (extrapolation=orangeline)” is used fill
 ![img_16.png](img_16.png)
 
 The following paragraph shows how to improve the resolution of G(r) 
-by using zeropad in F(q). Zeropad is a technique that inserts zeros 
+by using zeropad in F(q). Zero padding is a technique that inserts zeros 
 after qmax in F(q) before performing IFFT. This increases the number 
-of data points in G(r) and makes the peaks smoother. Zeropad is a technique 
+of data points in G(r) and makes the peaks smoother. Zero padding is a technique 
 that improves the quality of G(r) by inserting additional data points 
 between the original ones obtained from F(q). This does not mean adding zeros, 
 but rather interpolating the data to increase the resolution. 
@@ -197,22 +197,17 @@ Ions in 5IrC_r5a-1Ir_ion.xyz
 ![img_22.png](img_22.png)
 
 
-
-
-
-
-
-
 Calculating Compton scattering pattern
 ======================================
 
 The theoretical Compton scattering intensity, Iinc(q) (Egami & Billinge, 2003), shown in equation below, 
 represents the incoherent scattering contribution arising from the inelastic collision between X-ray photons and electrons. 
 Unlike coherent scattering, this component carries no structural information and acts as a background that increases with q, 
-significantly affecting the normalization of S(q) at high angles. 
-EZPDF evaluates the incoherent intensity per atom using the analytic parametrization of Balyuzi (Balyuzi, 1975), 
-who fitted the incoherent scattering factors of Cromer & Mann (Cromer & Mann, 1967) and Cromer (Cromer, 1969) to a five-Gaussian function of s = sin (θ)/lambda. 
-For each element a, this parametrization yields the quantity fₐ(q) = Za − Iinc(q), which approaches the atomic number Za at low q and decays toward zero at high q. 
+significantly affecting the normalization of S(q) at high angles. EZPDF evaluates the incoherent intensity per atom 
+using the analytic parametrization of Balyuzi (Balyuzi, 1975), who fitted the incoherent scattering factors of Cromer & Mann 
+(Cromer & Mann, 1967) and Cromer (Cromer, 1969) to a five-Gaussian function of s = sin(θ)/λ. 
+For each element a, this parametrization yields the quantity fₐ(q) = Za − Iinc(q), 
+which approaches the atomic number Za at low q and decays toward zero at high q. 
 Because Balyuzi fitted the quantity Za − Iinc(q) directly, the incoherent contribution of atom a is recovered as Za − fa(q), 
 which approaches zero at low q and Za at high q. The total Compton intensity is then the concentration-weighted sum over all atoms, 
 scaled by the Breit–Dirac recoil factor of equation (11), as given in equation below.
@@ -220,10 +215,12 @@ scaled by the Breit–Dirac recoil factor of equation (11), as given in equation
 ![img_26.png](img_26.png)
 
 ca (atomic fraction) = Na/N, where Na is the number of atoms of type a and N is the total number of atoms in the chemical unit); 
-Za is the atomic number of the ath type of atom; and fa(q) is the analytic incoherent-scattering parametrization of Balyuzi (1975). f(q) = Ffit(q) = Za – Iainc(q).
+Za is the atomic number of the ath type of atom; and fa(q) is the analytic incoherent-scattering parametrization of Balyuzi (1975). 
+f(q) = Ffit(q) = Za – Iainc(q).
 The Compton (incoherent) scattering coefficients were obtained from D. T. Cromer, J. Chem. Phys. 50, 4857 (1969), 
-as parametrized by H. H. M. Balyuzi, Acta Cryst. A31, 600 (1975). Balyuzi fitted the function F_fit(s) = Z − I_inc(s) (not the incoherent intensity itself) to a sum of five Gaussians, 
-where Z is the atomic number and s = sin(theta)/lambda. The fitted function is:
+as parametrized by H. H. M. Balyuzi, Acta Cryst. A31, 600 (1975). Balyuzi fitted the function F_fit(s) = Z − I_inc(s) 
+(not the incoherent intensity itself) to a sum of five Gaussians, where Z is the atomic number and s = sin(theta)/lambda. 
+The fitted function is:
 
 ![img_27.png](img_27.png)
 
@@ -263,19 +260,21 @@ the background-subtracted experimental intensity (Net I(q))
 ![img_36 .png](img_36.png)
 
 Figure presents the background-subtracted experimental intensity (Net I(q))
+
 ![img_37.png](img_37.png)
 
 Figure exhibits the structure function (not normalized S(q) = Standard S(q)) derived from the experimental intensity I(q) 
 (Net I(q) in the previous Figure. The not normalized S(q) shows an increase in intensity as a function of increasing q (1/Å), 
 which is attributed to the imperfection of all subtraction and the instrumental limitations. 
 To bring the oscillation of S(q) around 1, a form of correction is necessary.
-EZPDF employs a polynomial correction, similar to the approach taken by xPDFsuite. the normalized S(q) (=Poly corrected S(q)) is oscillated around 1.
+EZPDF employs a polynomial correction, similar to the approach taken by xPDFsuite. The normalized S(q) (Poly-corrected S(q)) then oscillates around 1.
 
 ![img_38.png](img_38.png)
 
 As an example of polynomial correction of S(q), polynomial order is used instead of r-poly, which is adopted in xPDFsuite.
-The blue line represents the  The not normalized S(q) and the orange line denotes the calculated polynomial for the blue line.
-The blue line (Poly corrected s(q) in right Figure) illustrates the S(q) after subtracting the orange line.
+The black line represents the "Experimental S(q)" which is not corrected by polynomial.
+The red line denotes the calculated polynomial for the black line.
+The blue line illustrates the S(q) after subtracting the red line from the black line.
 To obtain a polynomial function, a Vandermonde matrix with a least squares fit is utilized here.
 Reference materials:
 https://m.youtube.com/watch?v=BExDXaFOjF4
@@ -288,10 +287,10 @@ Numerical recipes by W. Press, B. Flannery, S. Teukolsky, W. Vetterling
 
 More detail of S(q) calculation
 ===============================
-Due to imperfection of all subtraction, the calculated S(q) does not oscillate a baseline (1) shown in blackline . 
+Due to imperfection of all subtraction, the calculated S(q) does not oscillate about the baseline (1), shown as baseline (1) shown in the black line. 
 So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), we need to use polynomial correction. 
-Vandermonde matrix and least square fit are combined to provide polynomial equation. Actually Numpy _polyfit_ in python use the same method. 
-So, you can used Numpy polyfit directrly. 
+Vandermonde matrix and least square fit are combined to provide polynomial equation. 
+Actually Numpy _polyfit_ in python use the same method. So, you can used Numpy polyfit directrly.
 The experimental structure function S(q) is obtained from the background-subtracted intensity using an ad hoc X-ray normalization 
 (PDFgetX3-style; Juhás et al., J. Appl. Cryst. 46, 560 (2013)).
 
@@ -304,7 +303,7 @@ The middle panel shows the structure function, S(q), calculated from the backgro
 This particular result arises because unwanted signals were not perfectly eliminated. By applying a polynomial correction to the calculated S(q), 
 the peaks are adjusted to oscillate around unity (1). The low panel demonstrates how polynomials of two different degrees fit the calculated S(q) data. 
 For better visualization, these polynomials were shifted by an offset of 1 and superimposed onto the S(q) plot. 
-Notably, the high-degree polynomial (order 20.0, blue) exhibits significant deviations from the appropriate degree (order 7.208, red), particularly in the low-q region.
+Notably, the high-degree polynomial (order 20.0, blue) exhibits significant deviations from the appropriate degree (order 7.208, red), particularly in the low-q region.  
 EZPDF constructs the polynomial fit explicitly from the Vandermonde matrix and numpy.linalg.lstsq rather than calling numpy.polyfit; the two are mathematically equivalent, 
 but the explicit formulation gives direct control over the design matrix used for the non-integer-order interpolation described below. 
 This error component is subsequently subtracted from the raw data to yield the final structure factor. 
@@ -319,6 +318,7 @@ from the two integer orders according to the formula P(q)Polynomial_for_sq = w_l
 For example, when utilizing a non-integer target polynomial order of 7.208, the interpolation is based on the closest integer boundaries of 7.0 and 8.0. 
 The weight assigned to the higher order (w_hi) is the fractional part (0.208), and the remaining weight for the lower order (w_lo) is 0.792. 
 Consequently, the final interpolated polynomial correction function is derived as a linear combination given by P(q)7.208 = 0.792 × P(q)7 + 0.208 × P(q)8.
+
 
 ![S(q)_calculation_polynomials.png](S(q)_calculation_polynomials.png)
 
@@ -337,7 +337,6 @@ The  top figure display how two different polynomial orders are superimposed on 
 The bottom plot illustrates the pair distribution function G(r), revealing that using a high-order polynomial leads to a loss of peaks in the low-r region(red). 
 This occurs because the high-order polynomial subtracts an excessive amount of intensity from the original calculated S(q).
 
-
 ![Polynomial_low_r_Gr.png](Polynomial_low_r_Gr.png)
 
 For comparison, S(q) (xpdfsute_S(q)) obtained from xPDFsuite is also displayed. 
@@ -345,7 +344,7 @@ Both S(q) representations are quite similar except low q in S(q).
 the middle figure presents the reduced structure function (F(q)) derived from S(q) in Figure d), where F(q) oscillates around 0. 
 For comparison, F(q) (xpdfsute_F(q)) from xPDFsuite is also shown. Apart from a difference in scaling, 
 both versions of F(q) are identical.
-The bottom figure displays pair distribution functions (integral-G(r), iff-G(r)) derived from F(q) in the middle figure. Using inverse fast Fourier transform (ifft). 
+The bottom figure displays pair distribution functions (integral-G(r), ifft-G(r)) derived from F(q) in the middle figure using inverse fast Fourier transform (ifft). 
 For comparison, G(r) (xpdfsute_G(r)) from xPDFsuite is also shown. the pair distribution functions are identical.
 
 ![img_s(q)_f(q)_g(r)_comparison.png](img_s%28q%29_f%28q%29_g%28r%29_comparison.png)
@@ -353,13 +352,13 @@ For comparison, G(r) (xpdfsute_G(r)) from xPDFsuite is also shown. the pair dist
 
 GUI of EZPDF 
 =============
-The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q), F(q), G(r). the loaded fil, necessary parameters, smooth function are shown. Also, “Open in New Graphs” allows new graph when open each file.
-Load file, folder, saved project file which as parameters and file path.
-View tab show “Dark Mode”.
+The picture shows GUI of EZPDF to process experimental I(q) data to obtain S(q), F(q), G(r). the loaded file, the necessary parameters, 
+and the smoothing function are shown. Also, “Open in New Graphs” allows new graph when open each file.
+Load file, folder, saved project file which as parameters and file path. View tab show “Dark Mode”.
 Select several files and delete all. **File drag-and-drop and deleted file recovery (Undo Delete) functions have been added.** 
 EZPDF panel
-![EZPDF_GUI.png](EZPDF_GUI.png)
 
+![EZPDF_GUI.png](EZPDF_GUI.png)
 
 Under “File”, “Open” each file, or selected files or files in folder can be loaded.
 “Opne Project” A saved project file” can be loaded.
@@ -375,18 +374,20 @@ Clicking the icon launches the EZPDF plot window as a pop-up
 
 ![EZPDF_panel_2Dgraph_icon.png](EZPDF_panel_2Dgraph_icon.png)
 
-The picture show EZPDF Plot and it shows I(q) (black) including background data (red), and background subtracted data (blue), 
+The picture shows the EZPDF Plot, displaying I(q) (black) including background data (red), and background subtracted data (blue), 
 S(q) with calculated S(q)(black) including polynomial data (red) and polynomial corrected S(q)(blue), F(q) (blue) and smoothed F(q) (black), 
 and G(r)(blue) and G(r) (black) from smoothed F(q).
 “Lock graph” lock the parameter on the graph. All parameter in “Lock graph” will not be change even though parameters is changed in EZPDF parameter. 
-So. You compare data with different data which have different parameters. Toggles (I(q), S(q), F(q), G(r)) shown in the down right corner) shows specific data only. 
+So. You compare data with different data which have different parameters.
+Toggles (I(q), S(q), F(q), G(r)) shown in the down right corner) shows specific data only. 
 
 ![EZPDF_plot.png](EZPDF_plot.png)
 
 The picture shows “Dark Mode” of EZPDF and EZPDF Plot.
 ![EZPDF__EZPDF_plot_Darkmode.png](EZPDF__EZPDF_plot_Darkmode.png)
 
-“Save data” saves processed data for experimental data or calculated data from input xyz model data. “Save figure” (not shown) saves EZPDDF Plot as PNG, JPEG, SVG, PDF.
+“Save data” saves processed data for experimental data or calculated data from input xyz model data. 
+“Save figure” (not shown) saves EZPDDF Plot as PNG, JPEG, SVG, PDF.
 
 ![EZPDF_plot_save_plot option.png](EZPDF_plot_save_plot%20option.png)
 
@@ -428,22 +429,25 @@ To address this issue without distorting the genuine scattering signal elsewhere
 WH_smooth_GUI, has been developed as a standalone companion tool to EZPDF. The four available modes are: (i) Whittaker–Henderson (WH) smoothing, 
 which suppresses high-frequency noise while preserving the underlying scattering envelope; (ii) Linear interpolation, which replaces a q interval with
 a straight line between its boundary points and is well-suited for removing very narrow, isolated artifacts; (iii) Automatic cubic-spline interpolation, 
-which fits a natural cubic spline through 2N anchor points sampled symmetrically outside the targeted q interval, providing a smooth baseline restoration that follows the local trend of the data; 
-and (iv) Manual cubic-spline interpolation, in which the user directly clicks on the graph to define anchor points, giving full control when the residual feature is irregular or 
-when the automatic methods fail to capture the desired baseline shape. All spline-based modes are performed in log-space when the data are strictly positive, 
-so the reconstructed segment correctly follows the exponentially decaying nature of typical scattering profiles. Independent λ, polynomial order, and blend-width parameters can be assigned to every q range, 
-allowing the processing strength and the cosine-taper transition width to be tailored to the local character of the data. At each range boundary, a cosine-taper blending function ensures a smooth, 
-artifact-free transition between the processed segment and the original data, preventing the introduction of discontinuities.
+which fits a natural cubic spline through 2N anchor points sampled symmetrically outside the targeted q interval, providing a smooth baseline restoration 
+that follows the local trend of the data; and (iv) Manual cubic-spline interpolation, in which the user directly clicks on the graph to define anchor points, 
+giving full control when the residual feature is irregular or when the automatic methods fail to capture the desired baseline shape. 
+All spline-based modes are performed in log-space when the data are strictly positive, so the reconstructed segment correctly follows the exponentially 
+decaying nature of typical scattering profiles. Independent λ, polynomial order, and blend-width parameters can be assigned to every q range, 
+allowing the processing strength and the cosine-taper transition width to be tailored to the local character of the data. At each range boundary, 
+a cosine-taper blending function ensures a smooth, artifact-free transition between the processed segment and the original data, preventing the introduction of discontinuities.
 Figure  shows the GUI of the standalone WH Range Smoother utility applied to an experimental dataset. The tool performs processing on the background-subtracted intensity I(q) − α × IBkg(q), 
-using a scale factor α = 2.17 to balance the sample and background contributions. 
-WH smoothing is applied independently across three user-defined q ranges: q = 1.9 – 2.3 / Å with λ = 10,000,000 (blend = 14 points), q = 2.3 – 8.0 / Å with λ = 1,000 (blend = 20), and q = 10 – 25 / Å with λ = 1,000 (blend = 20). 
-The cosine-taper blend at each boundary preserves continuity with the unmodified regions of the data, as confirmed by the residual curve in the lower panel, where ΔI ≈ 0 outside the shaded smoothing windows. 
-The use of a per-range λ parameter is essential because the local character of the scattering signal differs significantly across the q axis: at low q (1.9 – 2.3 / Å) the data contain sharp, 
-narrow features that require very strong smoothing to suppress, whereas at higher q a moderate λ is sufficient to remove statistical noise without distorting the underlying scattering envelope. 
-The reference curve (scaled by a factor of 10) overlaid on the main panel serves as an independent validation that the smoothed result faithfully reproduces the expected scattering profile across the entire q range.
+using a scale factor α = 2.17 to balance the sample and background contributions. WH smoothing is applied independently across three user-defined q ranges: 
+q = 1.9 – 2.3 / Å with λ = 10,000,000 (blend = 14 points), q = 2.3 – 8.0 / Å with λ = 1,000 (blend = 20), and q = 10 – 25 / Å with λ = 1,000 (blend = 20). 
+The cosine-taper blend at each boundary preserves continuity with the unmodified regions of the data, as confirmed by the residual curve in the lower panel, 
+where ΔI ≈ 0 outside the shaded smoothing windows. The use of a per-range λ parameter is essential because the local character of the scattering signal differs significantly across the q axis: 
+at low q (1.9 – 2.3 / Å) the data contain sharp, narrow features that require very strong smoothing to suppress, whereas at higher q a moderate λ is sufficient 
+to remove statistical noise without distorting the underlying scattering envelope. The reference curve (scaled by a factor of 10) overlaid on the main panel serves 
+as an independent validation that the smoothed result faithfully reproduces the expected scattering profile across the entire q range.
 
-Graphical user interface of the standalone WH Range Smoother utility. (Top) Overlaid curves on a logarithmic I(q) scale: raw sample intensity I(q) (black), scaled background α × IBkg(q) (blue), 
-background-subtracted intensity I(q) − α × IBkg(q) (red), the WH smoothed result (purple), and a scaled reference curve (green dashed) for comparison. Yellow shaded bands indicate the user-defined q ranges over which smoothing is applied. 
+Graphical user interface of the standalone WH Range Smoother utility. (Top) Overlaid curves on a logarithmic I(q) scale: raw sample intensity I(q) (black), 
+scaled background α × IBkg(q) (blue), background-subtracted intensity I(q) − α × IBkg(q) (red), the WH smoothed result (purple), and a scaled reference curve 
+(green dashed) for comparison. Yellow shaded bands indicate the user-defined q ranges over which smoothing is applied. 
 The inset (green rectangle) expands the q = 1.9–2.3 / Å region. (Bottom) Difference curve ΔI(q) = I(q) – ISmoothed(q).
 
 ![WH_smooth_GUI-5.jpg](WH_smooth_GUI-5.jpg)
