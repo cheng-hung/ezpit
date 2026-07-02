@@ -294,7 +294,7 @@ So, To bring oscillation of S(q) to 1 shown in redline (Calculated polynomial), 
 Vandermonde matrix and least square fit are combined to provide polynomial equation. 
 Actually Numpy _polyfit_ in python use the same method. So, you can used Numpy polyfit directrly.
 The experimental structure function S(q) is obtained from the background-subtracted intensity using an ad hoc X-ray normalization 
-(PDFgetX3-style; Juhás et al., J. Appl. Cryst. 46, 560 (2013)).
+(PDFgetX3 by Juhás et al., J. Appl. Cryst. 46, 560 (2013)).
 
 ![Experimental S(q) calculation.png](Experimental%20S%28q%29%20calculation.png)
 
