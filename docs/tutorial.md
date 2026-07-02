@@ -41,8 +41,10 @@ in “def load_atom_names(file_path)” function.
 EZPIT also requires two files including “aff_elementonly.txt” and “aff_parmonly.txt”. 
 “aff_elementonly.txt” include all atoms and ions fore atomic form factors and “aff_parmonly.txt” 
 has parameters for atomic form factors. The table of atomic form factor was obtained from 
-“International Tables for Crystallography (2006). Vol. C, ch. 4.3, pp. 259-429” and 
-the equation of atomic form factor is 
+“New Analytical Scattering Factor Functions for Free Atoms and Ions for Free Atoms and Ions by D. Waasmaier & A. Kirfel, 
+Acta Cryst. (1995). A51, 416-413 and PDFgetX2 library”. 
+Also International Tables for Crystallography (2006). Vol. C, ch. 4.3, pp. 259-429” provides scattering form factor. 
+The equation of atomic form factor is 
 
 ![img_3.png](img_3.png)
 
