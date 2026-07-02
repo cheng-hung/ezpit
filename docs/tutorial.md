@@ -206,24 +206,37 @@ Ions in 5IrC_r5a-1Ir_ion.xyz
 Calculating Compton scattering pattern
 ======================================
 
-The Compton scattering pattern can be obtained from the equation below.
+The theoretical Compton scattering intensity, Iinc(q) (Egami & Billinge, 2003), shown in equation below, 
+represents the incoherent scattering contribution arising from the inelastic collision between X-ray photons and electrons. 
+Unlike coherent scattering, this component carries no structural information and acts as a background that increases with q, 
+significantly affecting the normalization of S(q) at high angles. 
+EZPDF evaluates the incoherent intensity per atom using the analytic parametrization of Balyuzi (Balyuzi, 1975), 
+who fitted the incoherent scattering factors of Cromer & Mann (Cromer & Mann, 1967) and Cromer (Cromer, 1969) to a five-Gaussian function of s = sin (θ)/lambda. 
+For each element a, this parametrization yields the quantity fₐ(q) = Za − Iinc(q), which approaches the atomic number Za at low q and decays toward zero at high q. 
+Because Balyuzi fitted the quantity Za − Iinc(q) directly, the incoherent contribution of atom a is recovered as Za − fa(q), 
+which approaches zero at low q and Za at high q. The total Compton intensity is then the concentration-weighted sum over all atoms, 
+scaled by the Breit–Dirac recoil factor of equation (11), as given in equation below.
 
 ![img_26.png](img_26.png)
 
-The table for the Compton scattering atomic form factor was obtained from 
-D. T. Cromer, J. Chem. Phys. 50, 4857 (1969), and the equation for the Compton scattering atomic form factor is:
+ca (atomic fraction) = Na/N, where Na is the number of atoms of type a and N is the total number of atoms in the chemical unit); 
+Za is the atomic number of the ath type of atom; and fa(q) is the analytic incoherent-scattering parametrization of Balyuzi (1975). f(q) = Ffit(q) = Za – Iainc(q).
+The Compton (incoherent) scattering coefficients were obtained from D. T. Cromer, J. Chem. Phys. 50, 4857 (1969), 
+as parametrized by H. H. M. Balyuzi, Acta Cryst. A31, 600 (1975). Balyuzi fitted the function F_fit(s) = Z − I_inc(s) (not the incoherent intensity itself) to a sum of five Gaussians, 
+where Z is the atomic number and s = sin(theta)/lambda. The fitted function is:
 
 ![img_27.png](img_27.png)
 
-where f(k) represents the Compton scattering atomic form factor of the i-th atom (no ion information). 
-k is converted to momentum transfer (q) using (0.25⋅q/π)**2, where ai, bi, and C are the parameters from 
-"compton_elementonly.txt". The summation is over five terms. 
-When the code reads each atom in the ".xyz coordinate file," it identifies the row of each atom in 
+where F_fit(k) is Balyuzi's five-Gaussian fit for the i-th atom (no ion information). Note that F_fit is NOT an atomic form factor: 
+it equals Z − I_inc, so the incoherent (Compton) intensity per atom is recovered by simple subtraction, I_inc = Z − F_fit. 
+k is converted to momentum transfer (q) using (0.25⋅q/π)**2, where ai, bi, and C are the parameters from  "compton_elementonly.txt". 
+The summation is over five terms. When the code reads each atom in the ".xyz coordinate file," it identifies the row of each atom in 
 "compton_elementonly.txt" and extracts the corresponding parameters such as ai, bi, and C from "compton_parmonly.txt."
 
 ![img_28.png](img_28.png)
 
-The code for the atomic form factor of Compton scattering is shown below.
+The code that evaluates Balyuzi's fitted function F_fit(k) is shown below. 
+The incoherent intensity is then obtained as I_inc = Z − F_fit (averaged per atom and multiplied by the Breit–Dirac recoil factor).
 
 ![img_29.png](img_29.png)
 
@@ -240,8 +253,6 @@ Also, several important functions in "loadsaver.py" are explained in terms of th
 ![img_32.png](img_32.png)
 
 ![img_33.png](img_33.png)
-
-
 
 
 Calculating S(q), F(q), G(r) from experimental I(q)
@@ -364,10 +375,11 @@ Clicking the icon launches the EZPDF plot window as a pop-up
 
 ![EZPDF_panel_2Dgraph_icon.png](EZPDF_panel_2Dgraph_icon.png)
 
-The picture show EZPDF Plot and it shows I(q) (black) including background data (red), and background subtracted data (blue), S(q) with calculated S(q)(black) including polynomial data (red) and polynomial corrected S(q)(blue), F(q) (blue) and smoothed F(q) (black), and G(r)(blue) and G(r) (black) from smoothed F(q).
-
-“Lock graph” lock the parameter on the graph. All parameter in “Lock graph” will not be change even though parameters is changed in EZPDF parameter. So. You compare data with different data which have different parameters.
-Toggles (I(q), S(q), F(q), G(r)) shown in the down right corner) shows specific data only. 
+The picture show EZPDF Plot and it shows I(q) (black) including background data (red), and background subtracted data (blue), 
+S(q) with calculated S(q)(black) including polynomial data (red) and polynomial corrected S(q)(blue), F(q) (blue) and smoothed F(q) (black), 
+and G(r)(blue) and G(r) (black) from smoothed F(q).
+“Lock graph” lock the parameter on the graph. All parameter in “Lock graph” will not be change even though parameters is changed in EZPDF parameter. 
+So. You compare data with different data which have different parameters. Toggles (I(q), S(q), F(q), G(r)) shown in the down right corner) shows specific data only. 
 
 ![EZPDF_plot.png](EZPDF_plot.png)
 
