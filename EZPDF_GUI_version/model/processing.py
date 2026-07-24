@@ -3,8 +3,9 @@
 from model.math_functions import (cal_expSq, get_aff_scattering_factors, get_compton_parameter_only,
                                   cal_expGr_fft, smooth_whittaker, create_atom_distance_matrix,
                                   cal_Sq, compton_cal_exp, get_compton_scattering_factors, cal_fq)
-# [수정] convert_atom_names 추가 임포트
-from model.helpers import parse_composition, group_atoms, extract_data, convert_atom_names
+# [수정] convert_atom_names, composition_weights 추가 임포트
+from model.helpers import (parse_composition, group_atoms, extract_data,
+                           convert_atom_names, composition_weights)
 import numpy as np
 
 
@@ -29,25 +30,26 @@ def get_expSq(exp_data, control_panel, multiple_graphs=False):
         q_step = 0.01
 
     # -------------------------------------------------------------------------
-    # [버그 수정 구간] 원자 개수(N)를 올바르게 계산하도록 수정
+    # 조성 처리: 원소별 조성량을 그대로 가중치로 사용
     # -------------------------------------------------------------------------
-    # 1. 조성 문자열 파싱 -> Dictionary ({'Co':38, 'O':119})
+    # 1. 조성 문자열 파싱 -> Dictionary ({'Co':38, 'O':119, 'P':1})
     composition_dict = parse_composition(basic_parameters['composition'])
     # print(f"[DEBUG3] raw composition = {repr(basic_parameters['composition'])}")
     # print(f"[DEBUG3] composition_dict = {dict(composition_dict)}")
 
-    # 2. [핵심 수정] Dictionary를 전체 원자 리스트로 변환 (['Co', ..., 'O'])
-    # 기존: atom_names가 dict여서 len(atom_indices)가 2가 되었음.
-    # 수정: convert_atom_names를 통해 전체 리스트(157개)로 확장.
-    atom_names_list = convert_atom_names(composition_dict)
+    # 2. 고유 원소 이름과 그 조성량을 같은 순서로 추출.
+    #    원자를 개수만큼 나열하지 않으므로 조성 숫자가 커져도 비용이 늘지 않고,
+    #    Li0.2Co0.36Mn0.37Ni0.07 같은 소수 조성도 그대로 처리된다.
+    #    <f>, <f^2>는 총합으로 나눈 평균이므로 모든 원소에 같은 배수를 곱해도
+    #    결과는 같다 (Li0.2Co0.36Mn0.37Ni0.07 == Li20Co36Mn37Ni7).
+    unique_atom_names, atom_weights = composition_weights(composition_dict)
 
-    # 3. 전체 리스트를 기반으로 인덱스 생성 (len(atom_indices) == 157)
-    atom_indices = group_atoms(atom_names_list)[2]
-
-    # 4. 산란 인자는 고유 원소 이름만 있으면 되므로 keys() 사용 (속도 최적화)
-    # (helpers.py의 get_aff_scattering_factors는 리스트를 받아 처리하므로 unique list 전달)
-    unique_atom_names = list(composition_dict.keys())
+    # 3. 산란 인자는 고유 원소 이름 순서와 정확히 일치해야 한다.
     scattering_factors = get_aff_scattering_factors(unique_atom_names)
+
+    # 4. atom_indices는 하위 호환을 위해 유지 (정수 조성일 때만 의미가 있으며,
+    #    cal_expSq는 atom_weights가 주어지면 이 값을 사용하지 않는다).
+    atom_indices = np.arange(len(unique_atom_names))
     # -------------------------------------------------------------------------
 
     unit_type = basic_parameters['data_format']
@@ -69,11 +71,11 @@ def get_expSq(exp_data, control_panel, multiple_graphs=False):
     if background_enabled and background_path and not multiple_graphs:
         bkg_x, bkg_y = extract_data(background_path)
 
-    # 수정된 atom_indices(N=157)를 사용하여 계산 함수 호출
-    # Normalization 로직은 math_functions.py에 없으므로 추가되지 않음.
+    # 원소별 조성량(atom_weights)을 직접 넘겨 <f>, <f^2>를 가중 평균으로 계산
     res = cal_expSq(
         atom_indices, scattering_factors, exp_data, bkg_y,
-        qmin, qmax, q_step, background_scale, poly_order, True
+        qmin, qmax, q_step, background_scale, poly_order, True,
+        composition_weights=atom_weights
     )
 
     if bkg_y is not None:
@@ -129,15 +131,17 @@ def get_compton_values(control_panel):
     qstep = float(params['qstep'])
     wavelength = float(params['wavelength'])
     alpha = int(params['alpha'])
-    atom_names = parse_composition(params['composition'])
-    _, _, atom_indices = group_atoms(
-        atom_names)  # Compton 부분은 group_atoms가 dict를 받아도 되는지 확인 필요하나, helpers.py 구조상 리스트를 넣는게 안전함.
-    # Compton은 helpers.py를 따르므로 아래와 같이 수정 권장
-    atom_names_list = convert_atom_names(atom_names)
-    _, _, atom_indices = group_atoms(atom_names_list)
+    composition_dict = parse_composition(params['composition'])
 
-    form_factors, atomic_numbers = get_compton_scattering_factors(list(atom_names.keys()))  # 고유 원소만 필요
+    # 원소별 조성량을 그대로 가중치로 사용 (소수 조성도 지원).
+    unique_atom_names, atom_weights = composition_weights(composition_dict)
+
+    form_factors, atomic_numbers = get_compton_scattering_factors(unique_atom_names)
     compton_parm_only = get_compton_parameter_only()
-    return compton_cal_exp(atom_indices, compton_parm_only, form_factors, atomic_numbers, qmin, qmax, qstep, wavelength,
-                           alpha)
 
+    # atom_indices는 하위 호환용이며, composition_weights가 주어지면 사용되지 않는다.
+    atom_indices = np.arange(len(unique_atom_names))
+
+    return compton_cal_exp(atom_indices, compton_parm_only, form_factors, atomic_numbers,
+                           qmin, qmax, qstep, wavelength, alpha,
+                           composition_weights=atom_weights)

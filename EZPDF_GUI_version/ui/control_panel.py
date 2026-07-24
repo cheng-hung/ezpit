@@ -15,6 +15,17 @@ from model.helpers import preview_composition
 from controller.graph_controller import update_current_graph, calculate_compton
 
 
+# Hint shown under the composition field. Kept in one place because the same
+# text is used by both the Basic and the Compton tab.
+# Covers every accepted style: spaced or compact, a count of 1 that may be
+# omitted, and fractional amounts. Scaling every element by the same factor
+# describes the same material (Li0.2Co0.36Mn0.37Ni0.07 = Li20Co36Mn37Ni7).
+COMPOSITION_EXAMPLE_TEXT = (
+    "Examples:  C 1 O 2 P 5   ·   Co38O119P1   ·   SiO2  (a count of 1 may be omitted)\n"
+    "Fractions are allowed:  Li0.2Co0.36Mn0.37Ni0.07  =  Li20Co36Mn37Ni7"
+)
+
+
 class ControlPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__()
@@ -128,14 +139,16 @@ class ControlPanel(QWidget):
         self.background_enabled = False
 
         self.composition_input = QLineEdit()
-        self.composition_input.setPlaceholderText("Enter composition (e.g. C 1 O 2)")
+        self.composition_input.setPlaceholderText(
+            "Enter composition (e.g. C 1 O 2  or  Co38O119P1)")
         basic_layout.addRow("Composition:", self.composition_input)
 
-        self.composition_example_label = QLabel("Example: C 1 O 2 P 5")
+        self.composition_example_label = QLabel(COMPOSITION_EXAMPLE_TEXT)
         font_sm = self.composition_example_label.font()
         font_sm.setPointSize(8)
         self.composition_example_label.setFont(font_sm)
         self.composition_example_label.setStyleSheet("color: #666; font-weight: normal;")
+        self.composition_example_label.setWordWrap(True)
         basic_layout.addRow("", self.composition_example_label)
 
         self.composition_input.clear()
@@ -473,15 +486,17 @@ class ControlPanel(QWidget):
         compton_layout.addRow("Alpha:", self.alpha_dropdown)
 
         self.compton_composition_input = QLineEdit()
-        self.compton_composition_input.setPlaceholderText("Enter composition (e.g. Co 2 O 2 P 1)")
+        self.compton_composition_input.setPlaceholderText(
+            "Enter composition (e.g. Co 2 O 2 P 1  or  Co2O2P)")
         self.compton_composition_input.setText("")
         compton_layout.addRow("Composition:", self.compton_composition_input)
 
-        self.compton_composition_example_label = QLabel("Example: C 1 O 2 P 5")
+        self.compton_composition_example_label = QLabel(COMPOSITION_EXAMPLE_TEXT)
         f = self.compton_composition_example_label.font()
         f.setPointSize(8)
         self.compton_composition_example_label.setFont(f)
         self.compton_composition_example_label.setStyleSheet("font-weight: normal; color: #666;")
+        self.compton_composition_example_label.setWordWrap(True)
         compton_layout.addRow("", self.compton_composition_example_label)
 
         # Live preview for the Compton-tab composition field (its own label).
@@ -574,7 +589,7 @@ class ControlPanel(QWidget):
         text = line_edit.text() if line_edit is not None else ""
 
         if text is None or text.strip() == "":
-            label.setText("Example: C 1 O 2 P 5")
+            label.setText(COMPOSITION_EXAMPLE_TEXT)
             label.setStyleSheet("color: #666; font-weight: normal;")
             return
 
@@ -582,7 +597,7 @@ class ControlPanel(QWidget):
             result = preview_composition(text)
         except Exception:
             # Never let a preview failure interfere with normal input.
-            label.setText("Example: C 1 O 2 P 5")
+            label.setText(COMPOSITION_EXAMPLE_TEXT)
             label.setStyleSheet("color: #666; font-weight: normal;")
             return
 
@@ -765,7 +780,3 @@ class ControlPanel(QWidget):
     def on_gr_inputs_finished(self):
         self.send_update()
         self.enable_graphs(enable_gr=True)
-
-
-
-

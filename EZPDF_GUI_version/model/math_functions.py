@@ -50,7 +50,8 @@ def __cal_compton_fi(compton_scattering_factors, q):
 
 
 def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors,
-                    atomic_number, qmin=0.2, qmax=20, qstep=0.1, wavelength=0.1665, alpha=3):
+                    atomic_number, qmin=0.2, qmax=20, qstep=0.1, wavelength=0.1665, alpha=3,
+                    composition_weights=None):
 
     #============================================================================
     #  Compton (incoherent) X-ray scattering calculation
@@ -113,31 +114,47 @@ def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors
     h = 6.62607015e-14  # -34+20 , m^2 to A^2
     part_A = 2.0 * h * wavelength / me / C
 
-    num_atom = len(atom_indices)
     num_fact = len(compton_scattering_factors)
     q_range = np.arange(qmin, qmax, qstep)
+
+    # 원소별 조성량(가중치) 결정.
+    # composition_weights가 주어지면 원소당 한 개씩의 조성량으로 사용하고,
+    # 그렇지 않으면 원자를 나열한 atom_indices를 세어 가중치를 만든다.
+    # 두 방식은 같은 결과를 주며, 전자는 소수 조성도 처리할 수 있다.
+    if composition_weights is not None:
+        weights = np.asarray(composition_weights, dtype=float)
+        if weights.size != num_fact:
+            raise ValueError(
+                f"composition_weights has {weights.size} entries but there are "
+                f"{num_fact} compton scattering factors"
+            )
+    else:
+        weights = np.bincount(np.asarray(atom_indices),
+                              minlength=num_fact).astype(float)
+
+    num_atom = weights.sum()
 
     # [Optimization Note] This loop is kept as is, but can be vectorized if needed.
     # Typically Compton calculation is done once and is fast enough.
     list_compton_scat = []
     compton_scat = 0.0
 
+    # 원소별 원자번호를 가중치에 맞춰 미리 합산 (q에 무관하므로 루프 밖에서 계산)
+    atomic_number_arr = np.asarray(
+        [atomic_number[k] for k in range(num_fact)], dtype=float)
+    atomic_number_sum = float(np.dot(weights, atomic_number_arr))
+
     for q in q_range:
-        atomic_number_sum = 0.0
-        ffit_sum = 0.0
-        #fi2_sum = 0.0
         part_B = (q / (4.0 * np.pi)) ** 2.0
         BD_recoil_fact = (part_A * part_B + 1) ** (-alpha)  # Breit-Dirac recoil factor
         list_fi = []
         for k in range(num_fact):
             list_fi.append(__cal_compton_fi(compton_scat_parms[atomic_number[k] - 1], q))
         list_fi = np.asarray(list_fi)
-        for i, idx in enumerate(atom_indices):
-            fi = list_fi[idx]
-            atomic_number_sum = atomic_number_sum + atomic_number[idx]
-            ffit_sum = ffit_sum + fi  # I_inc = Z - F_fit (Balyuzi 1975); F_fit is already (Z - I_inc)
-            #fi2_sum = fi2_sum + fi   #removed due to a wwrong equation (fi ** 2) / atomic_number[idx]
-        compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum - 1 / num_atom * ffit_sum)
+        # I_inc = Z - F_fit (Balyuzi 1975); F_fit is already (Z - I_inc)
+        ffit_sum = float(np.dot(weights, list_fi))
+        compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum
+                                         - 1 / num_atom * ffit_sum)
         list_compton_scat.append(compton_scat)
     return q_range, list_compton_scat
 
@@ -222,7 +239,8 @@ def cal_Sq(atom_indices, scattering_factors, atom_distance_matrix,
 
 
 def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25, qstep=0.01,
-              background_scale=1.1, poly_order=11.0, return_Iq=False):
+              background_scale=1.1, poly_order=11.0, return_Iq=False,
+              composition_weights=None):
     """
     [VECTORIZED] Optimized version for Experimental S(q) calculation.
     Removed 'for q in q_range' loop for significant speedup.
@@ -265,26 +283,54 @@ def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25,
     list_Iq = scaled_expIq - list_scaled_bkgIq
 
     # -------------------------------------------------------------------
-    # 3. Form Factor Calculation (Vectorized)
+    # 3. Form Factor Calculation (Vectorized, weighted by composition)
     # -------------------------------------------------------------------
-    num_atom = len(atom_indices)
+    # Only the unique elements and how much of each is present matter here:
+    #
+    #     <f>   = sum_k(c_k * f_k)   / sum_k(c_k)
+    #     <f^2> = sum_k(c_k * f_k^2) / sum_k(c_k)
+    #
+    # `atom_indices` gives one entry per atom (the original form), e.g.
+    # Co38O119P1 -> 158 entries; the amount of each element is recovered by
+    # counting. Alternatively `composition_weights` gives one amount per unique
+    # element directly, which also allows fractional compositions such as
+    # Li0.2Co0.36Mn0.37Ni0.07.
+    #
+    # Both give the same averages, since scaling every element by the same
+    # factor cancels in the normalisation:
+    #   Li0.2Co0.36Mn0.37Ni0.07  ==  Li20Co36Mn37Ni7
+    atom_indices = np.asarray(atom_indices)
+    num_fact = len(scattering_factors)
 
     # (1) 모든 Unique Element(num_fact)에 대해 전체 q_range의 Form Factor 미리 계산
     # 결과 shape: (num_fact, len(q_range))
     # __cal_fi 함수가 numpy array 연산을 지원하므로 for loop 없이 한 번에 계산
     list_fi_all_q = np.array([__cal_fi(sf, q_range) for sf in scattering_factors])
 
-    # (2) 각 Atom Index에 맞는 Form Factor 배열로 확장
-    # atom_indices를 이용해 broadcast. 결과 shape: (num_atom, len(q_range))
-    atom_fi_all_q = list_fi_all_q[atom_indices]
+    # (2) 각 Unique Element의 조성량(가중치) 결정
+    # 결과 shape: (num_fact,)
+    if composition_weights is not None:
+        # Explicit amount per unique element (allows fractional compositions).
+        weights = np.asarray(composition_weights, dtype=float)
+        if weights.size != num_fact:
+            raise ValueError(
+                f"composition_weights has {weights.size} entries but there are "
+                f"{num_fact} scattering factors"
+            )
+    else:
+        # One entry per atom: count how many of each unique element.
+        weights = np.bincount(atom_indices, minlength=num_fact).astype(float)
 
-    # (3) <f> 및 <f^2> 계산
-    # axis=0 (Atom 방향)으로 합계 계산하여 (len(q_range), ) 크기의 1차원 배열 생성
-    sum_fi = np.sum(atom_fi_all_q, axis=0)  # Sum of f
-    sum_fi_sq = np.sum(atom_fi_all_q ** 2, axis=0)  # Sum of f^2
+    total_weight = weights.sum()
+    num_atom = total_weight
 
-    sq_mean_fi = (sum_fi / num_atom) ** 2  # <f>^2
-    mean_sq_fi = sum_fi_sq / num_atom  # <f^2>
+    # (3) <f> 및 <f^2> 계산 (조성으로 가중 평균)
+    # weights[:, None] 로 broadcast 하여 (len(q_range), ) 크기의 1차원 배열 생성
+    sum_fi = np.sum(weights[:, None] * list_fi_all_q, axis=0)  # Sum of c*f
+    sum_fi_sq = np.sum(weights[:, None] * list_fi_all_q ** 2, axis=0)  # Sum of c*f^2
+
+    sq_mean_fi = (sum_fi / total_weight) ** 2  # <f>^2
+    mean_sq_fi = sum_fi_sq / total_weight  # <f^2>
 
     # S(q) 계산 (배열 연산)
     # [EN] X-ray scattering-factor normalization following the ad hoc

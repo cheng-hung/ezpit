@@ -1,5 +1,29 @@
 import json  # JSON data handling - JSON 데이터 처리
 import os  # OS path and file handling - OS 경로 및 파일 처리
+import sys  # Needed to detect a PyInstaller bundle - PyInstaller 번들 감지용
+
+
+def resource_path(relative_path):
+    """Return the absolute path to a bundled resource.
+
+    Paths are resolved relative to the program itself rather than to the
+    directory the user happens to launch it from. A bare relative path such as
+    "ui/icons/graph2d.png" is resolved against the current working directory,
+    so it breaks as soon as the program is started from anywhere else - which
+    is always the case for a packaged executable the user double-clicks.
+
+    Works both when running from source and from a PyInstaller bundle.
+    `relative_path` is given relative to the project root, e.g.
+    "ui/icons/graph2d.png".
+    """
+    if hasattr(sys, "_MEIPASS"):
+        # Running inside a PyInstaller bundle.
+        base_path = sys._MEIPASS
+    else:
+        # Running from source: ui/ -> project root.
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
 
 # Internal module imports - 내부 모듈 임포트
 from controller.graph_controller import add_files_to_list_widget, load_selected_files
@@ -315,9 +339,9 @@ DARK_QSS = """
 class PDFApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        # --- 아이콘 설정 코드 (상대 경로 방식) ---
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(current_dir, "icons", "EZPDF_logo_2x_transparent.png")
+        # --- 아이콘 설정 코드 (번들 대응 경로 방식) ---
+        icon_path = resource_path(os.path.join("ui", "icons",
+                                               "EZPDF_logo_2x_transparent.png"))
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         # ----------------------------------------
@@ -369,7 +393,9 @@ class PDFApp(QMainWindow):
         menu_bar.setContentsMargins(0, 0, 0, 0)
 
         # 2D Graph Icon on menubar - 메뉴바의 2D 그래프 아이콘
-        graph_action = QAction(QIcon("ui/icons/graph2d.png"), "", self)
+        graph_action = QAction(
+            QIcon(resource_path(os.path.join("ui", "icons", "graph2d.png"))),
+            "", self)
         graph_action.setToolTip("Plot Selected File(s) (2D)")
         graph_action.triggered.connect(self.graph_files)
         menu_bar.addAction(graph_action)
@@ -690,4 +716,3 @@ class PDFApp(QMainWindow):
                 self.plot_windows.append(new_plot_window)
 
         self.current_path = selected_items
-
