@@ -15,7 +15,17 @@ Workflow:
 
 Requirements: PySide6, numpy, scipy, pyqtgraph
 Usage       : python wh_range_smoother.py
+
+Author      : Gihan Kwon
+Affiliation : National Synchrotron Light Source II (NSLS-II),
+              Brookhaven National Laboratory, Upton, NY, USA
+Contact     : gkwon@bnl.gov
+Version     : 1.0.0
+License     : (add your license here)
 """
+
+__author__ = "Gihan Kwon"
+__version__ = "1.0.0"
 
 import sys
 import os
@@ -44,10 +54,24 @@ from PySide6.QtWidgets import (
     QGroupBox, QSpinBox, QButtonGroup, QRadioButton,
     QCheckBox, QComboBox
 )
-from PySide6.QtGui import QKeySequence, QFont
+from PySide6.QtGui import QKeySequence, QFont, QAction, QPixmap, QIcon
 from PySide6.QtCore import Qt, QSettings, QTimer
 from PySide6.QtCore import Qt, QSettings
 import pyqtgraph as pg
+
+
+def _resource_path(relative_path):
+    """Return the absolute path to a bundled resource.
+
+    Works both when running from source and from a PyInstaller bundle.
+    PyInstaller sets sys._MEIPASS to the folder holding bundled files; when
+    running from source we fall back to this file's directory.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -441,6 +465,12 @@ class WHRangeSmoother(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WH Range Smoother")
+
+        # Window icon (title bar and taskbar).
+        _icon_path = _resource_path("WH.ico")
+        if os.path.exists(_icon_path):
+            self.setWindowIcon(QIcon(_icon_path))
+
         self.resize(1200, 760)
 
         self._settings = QSettings("EZPDF", "WHRangeSmoother")
@@ -460,6 +490,50 @@ class WHRangeSmoother(QMainWindow):
         self._last_click_time = 0.0     # debounce timestamp for manual clicks
 
         self._build_ui()
+        self._init_help_menu()
+
+    # ── Help menu / About ─────────────────────────────────────
+
+    def _init_help_menu(self):
+        menu_bar = self.menuBar()
+        help_menu = menu_bar.addMenu("Help")
+        about_action = QAction("About WH Smooth", self)
+        about_action.triggered.connect(self._show_about_dialog)
+        help_menu.addAction(about_action)
+
+    def _show_about_dialog(self):
+        about_text = """
+        <b>WH Smooth (Whittaker&ndash;Henderson Range Smoother) Version 1.0.0</b>
+        <p>: A standalone tool for Whittaker&ndash;Henderson smoothing over
+        selected q ranges of I(q), S(q), or F(q) data, developed by the
+        NSLS-II team.</p>
+
+        <p><b>Author:</b><br>
+        <b>National Synchrotron Light Source II:</b><br>
+        Gihan Kwon</p>
+
+        <p><b>Contact:</b><br>
+        gkwon@bnl.gov</p>
+
+        <p><b>Website:</b><br>
+        https://github.com/ezpit/ezpit</p>
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle("About WH Smooth")
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(about_text)
+
+        # Show the logo on the left. Prefer the high-resolution PNG so the
+        # logo stays sharp; fall back to the .ico if the PNG is not bundled.
+        logo_path = _resource_path("WHsmooth.png")
+        if not os.path.exists(logo_path):
+            logo_path = _resource_path("WH.ico")
+        if os.path.exists(logo_path):
+            pix = QPixmap(logo_path)
+            if not pix.isNull():
+                box.setIconPixmap(
+                    pix.scaledToWidth(220, Qt.TransformationMode.SmoothTransformation))
+        box.exec()
 
     # ── UI ────────────────────────────────────────────────────
 
