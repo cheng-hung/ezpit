@@ -1,0 +1,25 @@
+[workspace]
+name = "ezpit"
+version = "0.1.0"
+description = "Tools for pair distribution function analysis and structural refinement."
+authors = ["ezpit <scannerkwon@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.10,<3.14"
+numpy = "*"
+scipy = "*"
+pandas = "*"
+matplotlib = "*"
+pyside6 = "*"
+pyqtgraph = "*"
+ipython = "*"
+jupyterlab = "*"
+
+[tasks]
+ezpdf-gui = { cmd = "python main.py", cwd = "EZPDF_GUI_version" }
+wh-smooth = "python WH_smooth/WH_smooth_GUI.py"
+demo-compton = { cmd = "python examples/demo_Comptonscattering_1228_2025.py", cwd = "EZPDF_code_version" }
+demo-experimental = { cmd = "python examples/demo_experimental_data_testingcode_0526_2026.py", cwd = "EZPDF_code_version" }
+demo-xyz = { cmd = "python examples/demo_xyz_model_1228_2025.py", cwd = "EZPDF_code_version" }
