@@ -1,3 +1,14 @@
+# ----------------------------------------------------------------------------------
+# [EN] Path setup: add the EZPDF_code_version folder (parent of 'examples') to
+#      sys.path so 'losa' and 'proc' packages can be imported regardless of the
+#      current working directory.
+# [KR] 경로 설정: 'examples'의 상위 폴더(EZPDF_code_version)를 sys.path에 추가하여
+#      실행 위치와 무관하게 'losa', 'proc' 패키지를 import할 수 있게 합니다.
+# ----------------------------------------------------------------------------------
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import matplotlib.pyplot as plt  # [EN] Library for plotting graphs / [KR] 그래프를 그리기 위한 라이브러리
 import losa.loadersaver as losa  # [EN] Custom module for loading/saving data / [KR] 데이터 로드 및 저장을 위한 사용자 정의 모듈
 import proc.processing as proc   # [EN] Custom module for scientific calculations / [KR] 과학적 계산(S(q), G(r) 등)을 위한 사용자 정의 모듈

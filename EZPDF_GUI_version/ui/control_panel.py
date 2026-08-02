@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QDoubleValidator, QFont
 from .ui_helpers import add_slider_field, add_form_row
-from model.helpers import preview_composition
+from model.helpers import preview_composition, extract_data
+from model.math_functions import reset_warning_history
 from controller.graph_controller import update_current_graph, calculate_compton
 
 
@@ -195,6 +196,17 @@ class ControlPanel(QWidget):
     def _on_background_editing_finished(self):
         txt = (self.background_edit.text() or "").strip()
         if txt and os.path.isfile(txt):
+            # Warn if the pasted background's q-axis does not match the sample.
+            if not self._confirm_background_q_axis(txt):
+                # User declined: clear the background field.
+                self.background_path = None
+                self.background_enabled = False
+                self.use_bg_checkbox.setEnabled(False)
+                self.use_bg_checkbox.setChecked(False)
+                self.background_edit.setText("")
+                self.background_label.setText("No file selected")
+                self.send_update()
+                return
             self.background_path = txt
             self.background_label.setText(os.path.basename(txt))
             self.background_enabled = True
@@ -213,10 +225,23 @@ class ControlPanel(QWidget):
     def select_background_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Background File", "",
-            "CHI files (*.chi);;All files(*)"
+            "Data Files (*.chi *.iq *.xy *.dat *.txt);;All files(*)"
         )
         if not file_path:
             return
+
+        # Check that the background shares the sample's q-axis. Background
+        # subtraction is only physically valid when the sample and background
+        # were integrated with the same settings (identical q values). If they
+        # differ, warn the user once here and let them decide whether to
+        # continue, rather than silently producing a questionable result.
+        if not self._confirm_background_q_axis(file_path):
+            return
+
+        # A new background is a new situation, so allow the calculation-level
+        # warnings to be reported again for it.
+        reset_warning_history()
+
         self.background_edit.setText(file_path)
         self.background_label.setText(os.path.basename(file_path))
         self.background_path = file_path
@@ -224,6 +249,102 @@ class ControlPanel(QWidget):
         self.use_bg_checkbox.setEnabled(True)
         self.use_bg_checkbox.setChecked(True)
         self.send_update()
+
+    def _path_from_item(self, obj):
+        """Return a file path from a string or a QTreeWidgetItem.
+
+        file_panel.get_selected_file_paths() returns QTreeWidgetItem objects,
+        not path strings; the real path is stored under
+        Qt.ItemDataRole.UserRole.
+        """
+        if obj is None:
+            return None
+        if isinstance(obj, str):
+            return obj
+        data_fn = getattr(obj, "data", None)
+        if callable(data_fn):
+            try:
+                p = obj.data(0, Qt.ItemDataRole.UserRole)
+                if isinstance(p, str):
+                    return p
+            except Exception:
+                pass
+        return None
+
+    def _q_axis_mismatch(self, sample_path, bkg_path):
+        """Return a short description of the q-axis mismatch, or None if OK."""
+        try:
+            s = extract_data(sample_path)
+            b = extract_data(bkg_path)
+            if s is None or b is None:
+                return None
+            sample_q = np.asarray(s[0], dtype=float)
+            bkg_q = np.asarray(b[0], dtype=float)
+        except Exception:
+            return None
+
+        if len(sample_q) != len(bkg_q):
+            return (f"Different number of points "
+                    f"(sample: {len(sample_q)}, background: {len(bkg_q)}).")
+
+        max_abs_diff = float(np.max(np.abs(sample_q - bkg_q)))
+        if not np.allclose(sample_q, bkg_q, rtol=1e-5, atol=1e-6):
+            return f"Different q values (max difference = {max_abs_diff:.4g})."
+        return None
+
+    def _confirm_background_q_axis(self, bkg_path):
+        """Compare the background q-axis with the currently selected sample.
+
+        Returns True if it is safe to proceed (q-axes match, or the user chose
+        to continue anyway, or the comparison could not be made). Returns False
+        only if the user explicitly cancels after being warned.
+        """
+        # Find the currently selected sample file, if any.
+        sample_path = None
+        try:
+            mw = self.main_window
+            fp = getattr(mw, "file_panel", None)
+            if fp is not None and hasattr(fp, "get_selected_file_paths"):
+                selected = fp.get_selected_file_paths()
+                if selected:
+                    sample_path = self._path_from_item(selected[0])
+            if sample_path is None:
+                cur = getattr(mw, "current_path", None)
+                if isinstance(cur, (list, tuple)) and cur:
+                    sample_path = self._path_from_item(cur[0])
+                else:
+                    sample_path = self._path_from_item(cur)
+        except Exception:
+            sample_path = None
+
+        # Without a readable sample path to compare against we cannot check;
+        # allow it.
+        if not sample_path or not os.path.isfile(sample_path):
+            return True
+
+        mismatch_msg = self._q_axis_mismatch(sample_path, bkg_path)
+        if mismatch_msg is None:
+            return True   # q-axes match; nothing to warn about.
+
+        # This pair has now been reported, so send_update() should not warn
+        # about it again.
+        if not hasattr(self, "_bkg_warned_pairs"):
+            self._bkg_warned_pairs = set()
+        self._bkg_warned_pairs.add((sample_path, bkg_path))
+
+        # Warn and let the user choose.
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Background q-axis does not match")
+        box.setText(
+            mismatch_msg + "\n\n"
+            "Subtraction normally requires the same q values.\n"
+            "Use this background anyway?"
+        )
+        box.setStandardButtons(QMessageBox.StandardButton.Yes |
+                               QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        return box.exec() == QMessageBox.StandardButton.Yes
 
     def _on_use_bg_toggled(self, checked: bool):
         self.background_enabled = bool(checked) and bool(self.background_path)
@@ -673,7 +794,45 @@ class ControlPanel(QWidget):
         for window in active_windows:
             items = getattr(window, "associated_items", None)
             if items:
+                # Warn once if this window's sample does not share the
+                # background's q-axis. Checking here (rather than only when the
+                # background is picked) catches the case where the background
+                # was chosen first and a mismatching sample was opened later.
+                self._warn_if_bkg_q_mismatch(items)
                 update_current_graph(items, self, window)
+
+    def _warn_if_bkg_q_mismatch(self, items):
+        """Show the q-axis warning once for each sample/background pair."""
+        if not self.background_enabled or not self.background_path:
+            return
+        try:
+            sample_path = self._path_from_item(items[0] if isinstance(
+                items, (list, tuple)) else items)
+        except Exception:
+            return
+        if not sample_path or not os.path.isfile(sample_path):
+            return
+
+        pair = (sample_path, self.background_path)
+        if not hasattr(self, "_bkg_warned_pairs"):
+            self._bkg_warned_pairs = set()
+        if pair in self._bkg_warned_pairs:
+            return          # already warned about this combination
+        self._bkg_warned_pairs.add(pair)
+
+        mismatch = self._q_axis_mismatch(sample_path, self.background_path)
+        if mismatch:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle("Background q-axis does not match")
+            box.setText(
+                mismatch + "\n\n"
+                "Subtraction normally requires the same q values.\n"
+                "The background is interpolated onto the sample q-grid; "
+                "please check the result."
+            )
+            box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            box.exec()
 
     def set_basic_parameters(self, params: dict):
         data_format = params.get("data_format", "2theta")

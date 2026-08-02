@@ -587,7 +587,7 @@ class PlotWindow(QMainWindow):
 
     def plot_data(self, xs, ys, bkg_x, bkg_y, raw_x, raw_y,
                   list_Sq=None, Fq_smoothed=None, mean_sq_fi=None, sq_mean_fi=None,
-                  r_smoothed=None, G_smoothed=None, title=""):
+                  r_smoothed=None, G_smoothed=None, title="", bring_front=True):
         self._reset_intermediates()
 
         self.cached_xs = self.cached_ys = self.cached_titles = None
@@ -608,7 +608,12 @@ class PlotWindow(QMainWindow):
             Fq_smoothed = self._align_with_x(xs[2], Fq_smoothed)
         r_smoothed, G_smoothed = self._align_pair(r_smoothed, G_smoothed)
 
-        self.bring_to_front()
+        # Only bring the window to the front when a new file is opened here.
+        # During a parameter change every open plot window is replotted; raising
+        # them all would make the windows jump back and forth, so replots pass
+        # bring_front=False and stay wherever the user put them.
+        if bring_front:
+            self.bring_to_front()
         self.label.setText(f"Displaying: {title}")
         self.clear_slider_layout()
 
@@ -686,10 +691,11 @@ class PlotWindow(QMainWindow):
         for i in range(4):
             self._autorange_and_fix_x0(i)
 
-    def plot_multiple(self, list_of_xs, list_of_ys, titles=None):
+    def plot_multiple(self, list_of_xs, list_of_ys, titles=None, bring_front=True):
         self._reset_intermediates()
 
-        self.bring_to_front()
+        if bring_front:
+            self.bring_to_front()
         self.cached_xs = list_of_xs
         self.cached_ys = list_of_ys
         self.cached_titles = titles
@@ -1502,4 +1508,3 @@ class PlotWindow(QMainWindow):
                 self._force_x_from_zero(pw)
             except Exception:
                 pass
-

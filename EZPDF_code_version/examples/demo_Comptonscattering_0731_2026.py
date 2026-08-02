@@ -1,9 +1,19 @@
+# ----------------------------------------------------------------------------------
+# [EN] Path setup: add the EZPDF_code_version folder (parent of 'examples') to
+#      sys.path so 'losa' and 'proc' packages can be imported regardless of the
+#      current working directory.
+# [KR] 경로 설정: 'examples'의 상위 폴더(EZPDF_code_version)를 sys.path에 추가하여
+#      실행 위치와 무관하게 'losa', 'proc' 패키지를 import할 수 있게 합니다.
+# ----------------------------------------------------------------------------------
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import matplotlib.pyplot as plt  # [EN] Library for plotting graphs / [KR] 그래프를 그리기 위한 라이브러리
 import losa.loadersaver as losa  # [EN] Custom module for loading/saving data / [KR] 데이터 로드/저장용 사용자 정의 모듈
 import proc.processing as proc   # [EN] Custom module for scientific calculations / [KR] 과학적 계산용 사용자 정의 모듈
 import timeit                    # [EN] Tool to measure execution time / [KR] 실행 시간 측정 도구
 import numpy as np               # [EN] Library for numerical array processing / [KR] 수치 계산 및 배열 처리를 위한 라이브러리
-import sys                       # [EN] System-specific parameters and functions / [KR] 시스템 관련 기능 (종료 등)
 
 # [EN] Set base directory for data files
 # [KR] 데이터 파일들이 위치한 기본 경로 설정
@@ -23,9 +33,29 @@ compton_atomnumber_file = input_base + 'compton_atomicnumber.txt'    # 원자 �
 wavelength = 0.1665
 # [Type: int] Breit-Dirac recoil parameter (usually 2 or 3) (반동 보정 계수)
 alpha = 3  #2 or 3 can be used.
-# [Type: dict] Chemical composition of the sample (샘플의 화학 조성)
+# ----------------------------------------------------------------------------------
+# [EN] Chemical composition of the sample — EZPDF_GUI_3 compatible.
+#      Accepted formats:
+#        (1) dict           : {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}
+#        (2) compact string : "C30H24N6Ru1"  or  "C30H24N6Ru"
+#        (3) spaced string  : "C 30 H 24 N 6 Ru 1"
+#        (4) count-1 omitted: "SiO2"   (== {'Si': 1, 'O': 2})
+#      For a FRACTIONAL composition (e.g. "Li0.2Co0.36Mn0.37Ni0.07"),
+#      convert_atom_names cannot expand it into whole atoms — use
+#      composition_weights instead (see demo_experimental_data_testingcode).
+# [KR] 샘플의 화학 조성 — EZPDF_GUI_3 호환. 지원 형식:
+#        (1) 딕셔너리     : {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}
+#        (2) 붙여쓴 문자열 : "C30H24N6Ru1"  또는  "C30H24N6Ru"
+#        (3) 공백 문자열   : "C 30 H 24 N 6 Ru 1"
+#        (4) 개수 1 생략   : "SiO2"   (== {'Si': 1, 'O': 2})
+#      소수 조성(예: "Li0.2Co0.36Mn0.37Ni0.07")은 convert_atom_names로 정수
+#      원자 확장이 불가하므로 composition_weights 사용
+#      (demo_experimental_data_testingcode 참고).
+# ----------------------------------------------------------------------------------
 # composition = {'Co':2, 'O':2, 'P':1}
-composition = {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}
+composition = {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}  # [EN] dict form / [KR] 딕셔너리 형식
+# composition = "C30H24N6Ru1"                       # [EN] String form (same result) / [KR] 문자열 (동일 결과)
+# composition = "C 30 H 24 N 6 Ru 1"                # [EN] Spaced string / [KR] 공백 구분 문자열
 # [Type: float] Q range settings (Q 최소값, 최대값, 간격)
 qmin = 0
 qmax = 30

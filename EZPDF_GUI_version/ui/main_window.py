@@ -651,7 +651,7 @@ class PDFApp(QMainWindow):
     def select_files(self):
         # Select individual files - 개별 파일들을 선택합니다.
         file_filter = (
-            "All Supported Files (*.sq *.fq *.iq *.chi *.gr *.xyz *.calsq *.calfq *.caliq *.calgr *.compton);;"
+            "All Supported Files (*.sq *.fq *.iq *.chi *.xy *.dat *.txt *.gr *.xyz *.calsq *.calfq *.caliq *.calgr *.compton);;"
             "All Files (*)"
         )
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self._last_dir, file_filter)

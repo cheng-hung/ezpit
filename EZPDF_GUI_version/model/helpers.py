@@ -3,6 +3,8 @@ import numpy as np
 import os
 
 
+# helpers gathered from EZPIT
+
 def parse_composition(composition):
     """
     Parse a composition string from the Control Panel and turns it into a dictionary.
@@ -310,7 +312,10 @@ def detect_data_start(path):
     ext = os.path.splitext(path)[1].lower()
     is_xyz_format = ext == '.xyz'
 
-    with open(path, 'r') as f:
+    # Read as latin-1 so any byte decodes without error. Reduction tools often
+    # write non-UTF-8 characters in the header (e.g. the 'µ' in 'µm'), which
+    # would otherwise crash a strict UTF-8 read.
+    with open(path, 'r', encoding='latin-1') as f:
         for i, line in enumerate(f):
             parts = line.strip().split()
 
@@ -337,12 +342,39 @@ def detect_data_start(path):
 
 def extract_data(path):
     """
-    Attempts to extract experimental beamline data from a given path.
+    Attempts to extract experimental beamline data (two columns) from a path.
+
+    Automatically skips any header and handles the file variety produced by
+    common reduction tools: plain two-column .dat files, pyFAI / Fit2d '.xy'
+    files with '#' headers, JSON-style '#' headers, Windows or Unix line
+    endings, non-UTF-8 header bytes (e.g. 'µm'), and whitespace- or
+    comma-separated columns.
     """
     try:
-        start_line = detect_data_start(path)
-        data = np.loadtxt(path, skiprows=start_line)
-        return data[:, 0], data[:, 1]
+        # latin-1 decodes every byte without error; we only need the numbers.
+        with open(path, 'r', encoding='latin-1') as f:
+            lines = f.readlines()
+
+        x_vals, y_vals = [], []
+        for line in lines:
+            s = line.strip()
+            if not s or s[0] in ('#', '!', ';', '%'):
+                continue
+            parts = s.replace(',', ' ').split()
+            if len(parts) < 2:
+                continue
+            try:
+                a = float(parts[0])
+                b = float(parts[1])
+            except ValueError:
+                continue
+            x_vals.append(a)
+            y_vals.append(b)
+
+        if len(x_vals) < 2:
+            raise ValueError("No two-column numeric data found.")
+
+        return np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     except Exception as e:
         print(f"[Error] Failed to load or parse file '{path}': {e}")
         return
@@ -446,9 +478,6 @@ def trim_data_exact(x, y, qmin, qmax):
     # 2. 슬라이싱: 해당 위치의 x, y 값만 원본 그대로 가져옴
     # (새로운 grid를 만들거나 interp를 하지 않음)
     return x[mask], y[mask]
-
-
-
 
 
 

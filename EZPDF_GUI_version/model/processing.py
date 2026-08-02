@@ -71,9 +71,14 @@ def get_expSq(exp_data, control_panel, multiple_graphs=False):
     if background_enabled and background_path and not multiple_graphs:
         bkg_x, bkg_y = extract_data(background_path)
 
-    # 원소별 조성량(atom_weights)을 직접 넘겨 <f>, <f^2>를 가중 평균으로 계산
+    # 원소별 조성량(atom_weights)을 직접 넘겨 <f>, <f^2>를 가중 평균으로 계산.
+    # 배경은 [bkg_x, bkg_y] 형태로 넘겨, 샘플과 배경의 점 개수나 q 범위가 달라도
+    # cal_expSq가 각자의 q축으로 올바르게 보간하도록 한다. (예전에는 bkg_y만
+    # 넘겨서 두 파일 길이가 다르면 "fp and xp are not of the same length"
+    # 오류가 났다.)
+    bkg_arg = [bkg_x, bkg_y] if bkg_y is not None else None
     res = cal_expSq(
-        atom_indices, scattering_factors, exp_data, bkg_y,
+        atom_indices, scattering_factors, exp_data, bkg_arg,
         qmin, qmax, q_step, background_scale, poly_order, True,
         composition_weights=atom_weights
     )

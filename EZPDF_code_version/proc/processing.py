@@ -2,10 +2,11 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from scipy import interpolate
 import io
+import re  # [EN] (kept) / [KR] 문자열 처리용
+from math import factorial  # [EN] Mathematical factorial function / [KR] 수학 팩토리얼 함수
 # --- [EN] Added imports for Whittaker smoothing / [KR] Whittaker 스무딩 기능을 위해 추가된 라이브러리 ---
 import scipy.sparse as sp  # [EN] Sparse matrix package for efficient memory usage / [KR] 메모리를 효율적으로 쓰는 희소 행렬 패키지
 from scipy.linalg import cho_factor, cho_solve, LinAlgError  # [EN] Linear algebra solvers (Cholesky decomposition) / [KR] 선형대수 계산 (촐레스키 분해 및 해 구하기)
-from math import factorial  # [EN] Mathematical factorial function / [KR] 수학 팩토리얼 함수 (! 연산)
 from collections import Counter  # [EN] Dict subclass for counting hashable objects / [KR] 리스트 내 요소의 개수를 세는 도구
 
 
@@ -62,24 +63,157 @@ def load_scattering_factors(file_path):
     return np.array(data)
 
 
-def convert_atom_names(composition):
+def parse_composition(composition):
     """
-    [EN] Convert composition dict to a full list of atoms.
-    [KR] 조성 딕셔너리를 전체 원자 리스트로 변환합니다.
-    Ex: {'Co': 2, 'O': 1} -> ['Co', 'Co', 'O']
+    [EN] Parse a composition string into a dictionary (EZPDF_GUI_3 helpers.py behaviour).
+         Both spaced and compact styles are accepted, and a quantity of 1 may be
+         omitted. All of the following give {'Co': 38, 'O': 119, 'P': 1}:
+             'Co 38 O 119 P 1' / 'Co 38 O 119 P' / 'Co38O119P1' / 'Co38O119P'
+         Fractional amounts are kept AS-IS (not scaled to integers), because
+         form-factor averages are normalised by the total, so
+             'Li0.2Co0.36Mn0.37Ni0.07'  ==  'Li20Co36Mn37Ni7'
+         give identical <f> and <f^2>. A dict input is returned as-is.
+    [KR] 조성 문자열을 딕셔너리로 파싱합니다 (EZPDF_GUI_3 helpers.py 방식).
+         공백/붙여쓰기 모두 지원, 개수 1 생략 가능. 소수 조성은 정수로 변환하지
+         않고 그대로 유지합니다 (form-factor 평균이 총합으로 정규화되므로
+         'Li0.2Co0.36...' 과 'Li20Co36...' 이 동일한 결과를 줌).
+
+    Rules:
+      - Element symbol: one uppercase + optional one lowercase (H, O, Si, Co...).
+      - Quantity: positive int or decimal; omitted -> 1. Whole numbers kept as int.
+      - Whitespace ignored. Repeated element summed ('CoOCo' -> {'Co':2,'O':1}).
 
     Args:
-        composition (dict): [EN] Dictionary of element counts / [KR] 원소 개수 사전
+        composition (str or dict): [EN] Composition string or dict / [KR] 조성 문자열 또는 딕셔너리
 
     Returns:
-        atom_names (list): [EN] Full list of atom symbols / [KR] 전체 원자 기호 리스트
+        collections.Counter / dict: {element: count} (count may be float if fractional)
     """
-    atom_names = []
-    for item in composition.items():
-        key, value = item
-        for j in range(value):
-            atom_names.append(key)
-    return atom_names
+    if isinstance(composition, dict):
+        return composition
+
+    if composition is None or str(composition).strip() == "":
+        raise ValueError("The composition field must not be empty")
+
+    # [EN] Drop all whitespace / [KR] 공백 전부 제거
+    compact = "".join(ch for ch in composition if not ch.isspace())
+
+    composition_dict = Counter()
+    i = 0
+    length = len(compact)
+    while i < length:
+        ch = compact[i]
+
+        if not ch.isupper():
+            raise ValueError(
+                'Cannot read "{0}" — expected an element symbol starting '
+                'with a capital letter (e.g. Co 38 O 119 P 1 or Co38O119P)'.format(ch)
+            )
+
+        # [EN] Symbol: uppercase + optional lowercase / [KR] 대문자 + 선택적 소문자
+        element = ch
+        i += 1
+        if i < length and compact[i].islower():
+            element += compact[i]
+            i += 1
+
+        # [EN] Quantity: digits + at most one dot, or nothing (=1)
+        # [KR] 개수: 숫자 + 소수점 최대 1개, 없으면 1
+        digits = ""
+        seen_dot = False
+        while i < length and (compact[i].isdigit() or compact[i] == "."):
+            if compact[i] == ".":
+                if seen_dot:
+                    raise ValueError(
+                        "'{0}': count has more than one decimal point".format(element)
+                    )
+                seen_dot = True
+            digits += compact[i]
+            i += 1
+
+        if digits == "":
+            quantity = 1
+        else:
+            try:
+                quantity = float(digits)
+            except ValueError:
+                raise ValueError("'{0}': '{1}' is not a valid number".format(element, digits))
+            if quantity <= 0:
+                raise ValueError(
+                    "'{0}': count must be a positive number (got {1})".format(element, digits)
+                )
+            if float(quantity).is_integer():
+                quantity = int(quantity)  # [EN] keep whole as int / [KR] 정수는 int 유지
+
+        composition_dict[element] += quantity
+
+    if not composition_dict:
+        raise ValueError(
+            'Invalid composition string "{0}": no element found'.format(composition)
+        )
+
+    return composition_dict
+
+
+def composition_weights(composition):
+    """
+    [EN] Turn a composition dict into unique element names and their amounts (weights).
+         Fraction-safe counterpart of convert_atom_names() + group_atoms().
+         Form-factor averages need only per-element amounts:
+             <f>   = sum_k(c_k * f_k)   / sum_k(c_k)
+             <f^2> = sum_k(c_k * f_k^2) / sum_k(c_k)
+         Normalised by the total, so scaling every element by the same factor is
+         identical: {'Li':0.2,...} == {'Li':20,...} == {'Li':200,...}.
+    [KR] 조성 딕셔너리를 고유 원소 이름과 그 양(weight)으로 변환합니다.
+         convert_atom_names() + group_atoms()의 소수 지원 버전.
+         form-factor 평균은 원소별 양만 필요하며, 총합으로 정규화되므로 스케일 무관.
+
+    Args:
+        composition (dict or str): [EN] Composition (str is parsed) / [KR] 조성
+
+    Returns:
+        (names, weights):
+            names (list[str])      : [EN] Unique element names / [KR] 고유 원소 이름
+            weights (numpy.ndarray): [EN] Amounts as floats / [KR] 각 원소의 양 (실수)
+    """
+    if not isinstance(composition, dict):
+        composition = parse_composition(composition)
+
+    if not composition:
+        raise ValueError("The composition must not be empty")
+
+    names = list(composition.keys())
+    weights = np.asarray([float(composition[el]) for el in names], dtype=float)
+
+    if np.any(weights <= 0):
+        raise ValueError("All composition amounts must be positive")
+
+    return names, weights
+
+
+def convert_atom_names(composition):
+    """
+    [EN] Convert a whole-number composition (dict OR string) to a full list of
+         atom names, one entry per atom (xyz-model / theoretical paths).
+         For FRACTIONAL amounts, use composition_weights() instead.
+    [KR] 정수 조성(딕셔너리 또는 문자열)을 원자 하나당 한 항목 리스트로 변환.
+         소수 조성은 composition_weights()를 사용하세요.
+    Ex (dict)  : {'Co': 3, 'O': 4, 'P': 1} -> ['Co','Co','Co','O','O','O','O','P']
+    Ex (string): "Co3O4P1" / "Co 3 O 4 P" / "Co3O4P" -> same
+    """
+    comp = parse_composition(composition)
+
+    # [EN] Fractions cannot be expanded into individual atoms.
+    # [KR] 소수는 개별 원자로 확장 불가
+    for el, count in comp.items():
+        if not float(count).is_integer():
+            raise ValueError(
+                "'{0}': fractional amount {1} cannot be expanded into individual "
+                "atoms. Use composition_weights() instead, or scale every element "
+                "by the same factor (e.g. Li0.2Co0.36 -> Li20Co36).".format(el, count)
+            )
+
+    return [el for el, count in comp.items() for _ in range(int(count))]
 
 
 def get_scattering_factors(atom_names, database_atom_names, database_scat_factors):
@@ -233,62 +367,6 @@ def __cal_compton_fi(compton_scattering_factors, q):
 
 def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors,
                     atomic_number, qmin, qmax, qstep, wavelength, alpha):
-
-    # ============================================================================
-    #  Compton (incoherent) X-ray scattering calculation
-    #  컴프턴(비탄성) X선 산란 강도 계산
-    # ----------------------------------------------------------------------------
-    #  REFERENCE / 참고문헌
-    #  H. H. M. Balyuzi, "Analytic Approximations to Incoherently Scattered
-    #  X-Ray Intensities", Acta Cryst. (1975). A31, 600-602.
-    #
-    #  Source data of the tabulated coefficients (compton_parameter_only.txt):
-    #  계수 테이블의 원 출처:
-    #    DABAX file "CrossSec_Compton_Balyuzi.dat", extracted from sf_inc.f of
-    #    the library by S. Brennan and P. L. Cowan, Rev. Sci. Instrum. 63, 850
-    #    (1992). Coefficients originally from Cromer & Mann, J. Chem. Phys. 47,
-    #    1892 (1967) and Cromer, J. Chem. Phys. 50, 4857 (1969), fitted by
-    #    Balyuzi (1975).
-    #
-    #  KEY IDEA / 핵심 개념
-    #  --------------------------------------------------------------------------
-    #  EN: Balyuzi did NOT fit the incoherent intensity I_inc(s) directly.
-    #      He fitted the function  F(s) = Z - I_inc(s)  to a sum of five
-    #      Gaussians (no constant term, c = 0):
-    #
-    #          F_fit(s) = c + sum_{i=1..5} a_i * exp(-b_i * s^2),   c = 0
-    #
-    #      where  s = sin(theta)/lambda = Q / (4*pi),  and  Z = atomic number.
-    #      Therefore the incoherent (Compton) intensity per atom is recovered by
-    #      a simple subtraction:
-    #
-    #          I_inc(s) = Z - F_fit(s)
-    #
-    #      F_fit is ALREADY (Z - I_inc); it is NOT an atomic form factor, so it
-    #      must not be squared or divided by Z. (This was the previous bug.)
-    #
-    #  KR: Balyuzi는 비탄성 강도 I_inc(s)를 직접 피팅한 것이 아니라,
-    #      함수  F(s) = Z - I_inc(s)  를 5개의 가우시안 합(상수항 c = 0)으로
-    #      피팅했다:
-    #
-    #          F_fit(s) = c + Σ_{i=1..5} a_i · exp(-b_i · s^2),   c = 0
-    #
-    #      여기서  s = sin(theta)/lambda = Q / (4π),  Z = 원자번호 이다.
-    #      따라서 원자당 비탄성(컴프턴) 강도는 단순한 뺄셈으로 얻는다:
-    #
-    #          I_inc(s) = Z - F_fit(s)
-    #
-    #      F_fit 은 그 자체가 이미 (Z - I_inc) 값이며, 원자 form factor가
-    #      아니다. 그러므로 제곱하거나 Z로 나누면 안 된다. (이전 버그의 원인)
-    #
-    #  VALIDITY RANGE / 유효 범위
-    #  --------------------------------------------------------------------------
-    #  EN: The fit is accurate for s = sin(theta)/lambda <= ~1.4-1.5 A^-1,
-    #      i.e. Q <= ~18-19 A^-1. Beyond this, values are extrapolated.
-    #  KR: 이 피팅은 s = sin(theta)/lambda <= 약 1.4~1.5 A^-1 (즉 Q <= 약
-    #      18~19 A^-1) 범위에서 정확하다. 그 이상은 외삽 영역이다.
-    # ============================================================================
-
     """
     [EN] Calculate total experimental Compton scattering intensity.
          Includes Breit-Dirac recoil factor correction.
@@ -315,8 +393,7 @@ def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors
 
     for q in q_range:
         atomic_number_sum = 0.0
-        ffit_sum = 0.0
-        #fi2_sum = 0.0
+        fi2_sum = 0.0
         part_B = (q / (4.0 * np.pi)) ** 2.0
         # [EN] Breit-Dirac recoil factor calculation
         # [KR] Breit-Dirac 반동 인자 계산
@@ -328,10 +405,8 @@ def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors
         for i, idx in enumerate(atom_indices):
             fi = list_fi[idx]
             atomic_number_sum = atomic_number_sum + atomic_number[idx]
-            ffit_sum = ffit_sum + fi  # I_inc = Z - F_fit (Balyuzi 1975); F_fit is already (Z - I_inc)
-            # fi2_sum = fi2_sum + fi   #removed due to a wwrong equation (fi ** 2) / atomic_number[idx]
-        compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum - 1 / num_atom * ffit_sum)
-        #compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum - 1 / num_atom * fi2_sum)
+            fi2_sum = fi2_sum + (fi ** 2) / atomic_number[idx]
+        compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum - 1 / num_atom * fi2_sum)
         list_compton_scat.append(compton_scat)
     return q_range, list_compton_scat
 
@@ -710,25 +785,49 @@ def cal_Gr_fft(q, Sq, rmin=0, rmax=100, rstep=0.02, qdamp=0.0,
 # [Cal_expSq] Core Analysis Function / 핵심 분석 함수
 # ----------------------------------------------------------------------------------
 def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25, qstep=0.01,
-              background_scale=1.1, poly_order=11.0, return_Iq=False):
+              background_scale=1.1, poly_order=11.0, return_Iq=False, weights=None):
     """
     [EN] Core function to calculate Structure Factor S(q) and F(q) from experimental I(q).
-    [KR] 실험 데이터 I(q)로부터 구조 인자 S(q)와 F(q)를 계산하는 핵심 함수입니다.
+         Supports BOTH integer and fractional compositions:
+           - Integer (default): pass 'atom_indices' (one entry per atom, from
+             group_atoms), and each element's form factor is counted with weight 1.
+           - Fractional: pass 'weights' (per-unique-element amounts from
+             composition_weights). 'scattering_factors' must then be ordered to
+             match the unique-element order of 'weights', and 'atom_indices' is
+             ignored for the averaging. Fractional amounts (e.g. Li0.2Co0.36...)
+             are used directly since <f>, <f^2> are normalised by the total weight.
+    [KR] 실험 I(q)로부터 S(q), F(q)를 계산하는 핵심 함수. 정수/소수 조성 모두 지원.
+           - 정수(기본): group_atoms의 'atom_indices' 전달 (원자당 항목, weight=1).
+           - 소수: composition_weights의 'weights' 전달 (고유 원소별 양).
+             이때 'scattering_factors'는 weights의 고유 원소 순서와 일치해야 하며,
+             평균 계산에서 atom_indices는 무시됩니다. 소수 조성(예: Li0.2Co0.36...)은
+             <f>, <f^2>가 총 weight로 정규화되므로 그대로 사용됩니다.
 
     Steps (단계):
-    1. Load Data (데이터 로드)
-    2. Interpolate (보간: 데이터를 동일한 간격으로 맞춤)
-    3. Background Subtraction (배경 제거)
-    4. Calculate Theoretical Form Factors (이론적 형상 인자 계산)
-    5. Calculate S(q) (S(q) 계산)
-    6. Polynomial Correction (다항식 보정)
+    1. Load Data / 2. Interpolate / 3. Background Subtraction
+    4. Form Factors (weighted) / 5. S(q) (PDFgetX3) / 6. Polynomial Correction
 
     Args:
-        poly_order (float): [EN] Order of polynomial for correction / [KR] 보정용 다항식 차수
-        background_scale (float): [EN] Scaling factor for background / [KR] 배경 제거 스케일 팩터
+        atom_indices (array): [EN] Per-atom element index (integer composition)
+                              [KR] 원자별 원소 인덱스 (정수 조성)
+        scattering_factors (ndarray): [EN] Per-unique-element scattering params
+                                      [KR] 고유 원소별 산란 파라미터
+        weights (array, optional): [EN] Per-unique-element amounts (fractional
+                                   composition). If given, overrides atom_indices
+                                   for the <f>, <f^2> averaging.
+                                   [KR] 고유 원소별 양 (소수 조성). 주어지면 평균
+                                   계산에서 atom_indices 대신 사용됨.
+        poly_order (float): [EN] Polynomial order for correction / [KR] 보정 다항식 차수
+        background_scale (float): [EN] Background scale factor / [KR] 배경 스케일
 
     Returns:
-        Tuple containing q, Iq, S(q), F(q), etc. / Q, I(q), S(q), F(q) 등을 포함한 튜플
+        Tuple of 13 values / 13개 값의 튜플:
+            q_range, list_Iq, scaled_expIq, list_scaled_bkgIq, list_Sq, norm_list_Sq,
+            list_Fq, mean_sq_fi, sq_mean_fi, polynomial_for_sq,
+            normalized_intensity, normal_scattering_factor, normalization_scale
+          - normalized_intensity     : I / <f>^2           (array)
+          - normal_scattering_factor : <f^2> / <f>^2        (array)
+          - normalization_scale      : PDFgetX3 least-squares scale (scalar)
     """
     # 1. Load Data
     if isinstance(expqiq, str):
@@ -767,34 +866,56 @@ def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25,
     list_scaled_bkgIq = background_scale * scaled_bkgIq
     list_Iq = scaled_expIq - list_scaled_bkgIq
 
-    # 4. Calculate Form Factors (VECTORIZED)
-    # [EN] Vectorized form factor calculation — removes 'for q in q_range' loop
-    #      for significant speedup. Result is identical to the loop version.
-    # [KR] 벡터화된 형상 인자 계산 — 'for q in q_range' 루프 제거로 속도 향상.
-    #      결과는 루프 버전과 동일합니다.
-    num_atom = len(atom_indices)
+    # 4. Calculate Form Factors (VECTORIZED, weight-aware)
+    # [EN] Vectorized form factor calculation. Supports both:
+    #        - integer composition via atom_indices (weight 1 per atom), and
+    #        - fractional composition via 'weights' (per-unique-element amounts).
+    #      Both reduce to the SAME normalised averages:
+    #        <f>   = Σ_k(c_k · f_k)   / Σ_k(c_k)
+    #        <f^2> = Σ_k(c_k · f_k^2) / Σ_k(c_k)
+    #      For the integer path, c_k is the number of atoms of element k
+    #      (obtained by counting atom_indices), which is exactly equivalent to
+    #      the previous per-atom sum divided by num_atom.
+    # [KR] 벡터화된 형상 인자 계산. 정수(atom_indices) / 소수(weights) 모두 지원.
+    #      둘 다 동일한 정규화 평균으로 귀결됩니다.
+    #      정수 경로에서 c_k는 원소 k의 원자 수(atom_indices를 세어 구함)이며,
+    #      이는 기존의 원자별 합을 num_atom으로 나눈 것과 정확히 동일합니다.
 
-    # [EN] (1) Pre-compute form factors for ALL elements over the entire q_range.
-    #          __cal_fi supports numpy array input, so we get a 2D array at once.
+    # [EN] (1) Form factors for ALL unique elements over the whole q_range.
     #          Result shape: (num_unique_elements, len(q_range))
-    # [KR] (1) 모든 unique element에 대해 전체 q_range의 form factor를 한번에 계산.
-    #          __cal_fi가 numpy 배열 연산을 지원하므로 2D 배열로 한번에 얻음.
-    #          결과 shape: (num_unique_elements, len(q_range))
+    # [KR] (1) 모든 고유 원소의 전체 q_range form factor. shape: (원소수, q수)
     list_fi_all_q = np.array([__cal_fi(sf, q_range) for sf in scattering_factors])
 
-    # [EN] (2) Broadcast to each atom via atom_indices.
-    #          Result shape: (num_atom, len(q_range))
-    # [KR] (2) atom_indices를 이용해 각 원자별 form factor 배열로 확장.
-    #          결과 shape: (num_atom, len(q_range))
-    atom_fi_all_q = list_fi_all_q[atom_indices]
+    # [EN] (2) Determine per-unique-element weights c_k.
+    # [KR] (2) 고유 원소별 weight c_k 결정.
+    if weights is not None:
+        # [EN] Fractional composition: use given weights directly.
+        # [KR] 소수 조성: 주어진 weight 직접 사용.
+        c_k = np.asarray(weights, dtype=float)               # shape: (num_unique_elements,)
+    else:
+        # [EN] Integer composition: count how many atoms per unique element
+        #      from atom_indices (0,1,2,... referring to scattering_factors rows).
+        # [KR] 정수 조성: atom_indices에서 고유 원소별 원자 수를 셈.
+        num_unique = len(scattering_factors)
+        c_k = np.bincount(np.asarray(atom_indices), minlength=num_unique).astype(float)
 
-    # [EN] (3) Sum over atom axis (axis=0) → 1D array of shape (len(q_range),)
-    # [KR] (3) Atom 방향(axis=0)으로 합계 → (len(q_range),) 크기 1D 배열
-    sum_fi    = np.sum(atom_fi_all_q,       axis=0)   # Σ f_i
-    sum_fi_sq = np.sum(atom_fi_all_q ** 2,  axis=0)   # Σ f_i²
+    total_c = np.sum(c_k)                                     # Σ c_k (= num_atom for integer)
 
-    sq_mean_fi = (sum_fi / num_atom) ** 2             # <f>²
-    mean_sq_fi = sum_fi_sq / num_atom                 # <f²>
+    # [EN] (3) Weighted averages over unique elements (broadcast c_k over q axis).
+    #          list_fi_all_q shape: (num_unique, num_q); c_k shape: (num_unique,)
+    # [KR] (3) 고유 원소에 대한 가중 평균 (c_k를 q축으로 broadcast).
+    weighted_fi    = c_k[:, None] * list_fi_all_q             # c_k · f_k
+    weighted_fi_sq = c_k[:, None] * (list_fi_all_q ** 2)      # c_k · f_k²
+
+    sum_fi    = np.sum(weighted_fi,    axis=0)                # Σ c_k · f_k
+    sum_fi_sq = np.sum(weighted_fi_sq, axis=0)                # Σ c_k · f_k²
+
+    sq_mean_fi = (sum_fi / total_c) ** 2                      # <f>²
+    mean_sq_fi = sum_fi_sq / total_c                          # <f²>
+
+    # [EN] num_atom kept for backward compatibility (integer path only).
+    # [KR] num_atom은 하위 호환성을 위해 유지 (정수 경로).
+    num_atom = int(round(total_c))
 
     # 6. Calculate S(q) — PDFgetX3 normalization (default)
     # ------------------------------------------------------------------
@@ -872,17 +993,20 @@ def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25,
         poly_hi = _poly_for_sq_at_order(hi)
         polynomial_for_sq = w_lo * poly_lo + w_hi * poly_hi
 
+        # print('w_hi = ', w_hi)
+        # print('w_lo = ', w_lo)
+        # print('lo = ', lo)
+        # print('hi = ', hi)
+
     # [EN] Normalize S(q) and calculate F(q)
     # [KR] S(q) 정규화 및 F(q) 계산
     norm_list_Sq = list_Sq - polynomial_for_sq  # [EN] Remove polynomial background / [KR] 다항식 배경 제거
     list_Fq = q_range * (norm_list_Sq - 1.0)
 
     if return_Iq:
-        return (q_range, list_Iq, scaled_expIq, list_scaled_bkgIq, list_Sq, norm_list_Sq, list_Fq, mean_sq_fi, sq_mean_fi,
-                polynomial_for_sq, normalized_intensity,normal_scattering_factor, normalization_scale)
+        return q_range, list_Iq, scaled_expIq, list_scaled_bkgIq, list_Sq, norm_list_Sq, list_Fq, mean_sq_fi, sq_mean_fi, polynomial_for_sq, normalized_intensity, normal_scattering_factor, normalization_scale
     else:
-        return (q_range, list_Iq, scaled_expIq, list_scaled_bkgIq, list_Sq, norm_list_Sq, list_Fq, mean_sq_fi, sq_mean_fi,
-                polynomial_for_sq, normalized_intensity,normal_scattering_factor, normalization_scale)
+        return q_range, list_Iq, scaled_expIq, list_scaled_bkgIq, list_Sq, norm_list_Sq, list_Fq, mean_sq_fi, sq_mean_fi, polynomial_for_sq, normalized_intensity, normal_scattering_factor, normalization_scale
 
 
 def cal_fq(qmin, qmax, Sq, qstep=0.01):
@@ -930,7 +1054,7 @@ def cal_fq(qmin, qmax, Sq, qstep=0.01):
 
 
 def cal_expGr_fft(q, Sq_or_Fq, rmin=0, rmax=100, rstep=0.01, is_Fq=False,
-                  pad_mode="zero", low_q_mode="linear", extrapolate_type="linear",
+                  pad_mode="zero", low_q_mode="anchor", extrapolate_type="linear",
                   return_padding=False):
     """
     [EN] Calculate G(r) from S(q) or F(q) using IFFT with low-q extrapolation
@@ -1043,7 +1167,6 @@ def cal_expGr_fft(q, Sq_or_Fq, rmin=0, rmax=100, rstep=0.01, is_Fq=False,
                                                kind=extrapolate_type)
                 pad_Fq[:num_point] = f_inter(np.arange(num_point) * qstep_calc)
 
-
         # [EN] Save the three segments for visualization (BEFORE Nyquist interpolation)
         # [KR] Nyquist 보간 전 3구간을 시각화용으로 저장
         q_low_vis = np.arange(num_point) * qstep_calc
@@ -1110,11 +1233,6 @@ def cal_expGr_fft(q, Sq_or_Fq, rmin=0, rmax=100, rstep=0.01, is_Fq=False,
             # [KR] IFFT에 실제로 들어간 전체 padded F(q) 배열 (3개 구간 합친 것)
             q_full_padded = np.arange(total_point) * qstep_calc
             F_full_padded = Fq_pad.copy()
-            # print('q_full_padded = ', q_full_padded)
-            # print('F_full_padded = ', F_full_padded)
-            #
-            np.savetxt('D:/1-Manuscript_2014/EZPDF_EZPIT/CoPi_test/q_full_padded.txt', q_full_padded)
-            np.savetxt('D:/1-Manuscript_2014/EZPDF_EZPIT/CoPi_test/F_full_padded.txt', F_full_padded)
 
             padding_info = {
                 'q_low':         q_low_vis,
@@ -1201,9 +1319,6 @@ def cal_expGr_fft_from_Fq(q, Fq, rmin=0, rmax=100, rstep=0.01, pad_mode="zero",
     rfine = np.arange(half) * rstep
     gr_fine = gr_full[:half]
     gr = np.interp(r_list, rfine, gr_fine)
-
-    # np.savetxt('D:/1-Manuscript_2014/EZPDF_EZPIT/CoPi_test/pad_len.txt', pad_len)
-    np.savetxt('D:/1-Manuscript_2014/EZPDF_EZPIT/CoPi_test/Fq_pad.txt', Fq_pad)
 
     return r_list, gr
 
@@ -1334,3 +1449,4 @@ def smooth_with_noise_gain(y, gain=1e-4, order=2):
     """
     lambda_ = noise_gain_to_lambda(gain, order)
     return smooth_whittaker(y, lambda_, order)
+

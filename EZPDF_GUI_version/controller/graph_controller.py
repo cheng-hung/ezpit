@@ -13,7 +13,7 @@ from model.saver import write_compton_file
 from .utils import apply_optimal_pdf_settings
 
 VALID_EXTENSIONS = [
-    ".chi", ".gr", ".sq", "fq", ".iq", ".xyz",
+    ".chi", ".gr", ".sq", ".fq", ".iq", ".xy", ".dat", ".txt", ".xyz",
     ".caliq", ".calsq", ".calfq", ".calgr", ".compton"
 ]
 
@@ -47,6 +47,14 @@ def load_selected_files(selected_items, label_widget, plot_window_ref, control_p
                 list_Sq, Fq_smoothed, mean_sq_fi, sq_mean_fi,
                 r_smoothed, G_smoothed, os.path.basename(path)
             )
+
+            # A Compton curve only has an I(q)-type panel; S(q), F(q) and G(r)
+            # would just be empty, so show the I(q) panel alone. The user can
+            # still tick the other boxes if they want them.
+            if ext == '.compton':
+                plot_window_ref.enable_graphs(enable_iq=True, enable_sq=False,
+                                              enable_fq=False, enable_gr=False)
+
             label_widget.setText(f"Showing plot for {short_name}")
 
         else:
@@ -214,8 +222,14 @@ def update_current_graph(selected_items, control_panel, plot_window):
             plot_window.plot_data(
                 xs, ys, bkg_x, bkg_y, raw_x, raw_y,
                 list_Sq, Fq_smoothed, mean_sq_fi, sq_mean_fi,
-                r_smoothed, G_smoothed, os.path.basename(path)
+                r_smoothed, G_smoothed, os.path.basename(path),
+                bring_front=False
             )
+
+            # Compton curves only populate the I(q) panel (see load_selected_files).
+            if extension == '.compton':
+                plot_window.enable_graphs(enable_iq=True, enable_sq=False,
+                                          enable_fq=False, enable_gr=False)
 
         else:
             list_xs = []
@@ -231,7 +245,8 @@ def update_current_graph(selected_items, control_panel, plot_window):
                 list_ys.append(ys)
 
             if list_xs and list_ys:
-                plot_window.plot_multiple(list_xs, list_ys, titles=legend_names)
+                plot_window.plot_multiple(list_xs, list_ys,
+                                          titles=legend_names, bring_front=False)
 
         # Do NOT restore ranges after a parameter-driven update.
         # plot_data() already calls _autorange_and_fix_x0() for every subplot,
@@ -256,4 +271,3 @@ def calculate_compton(control_panel):
     q_range = np.array(q_range)
 
     write_compton_file(q_range, list_compton_scat, control_panel)
-
