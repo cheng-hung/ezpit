@@ -1331,7 +1331,11 @@ class PlotWindow(QMainWindow):
             QSvgGenerator = None
         filters = "PNG (*.png);;JPEG (*.jpg *.jpeg);;SVG (*.svg);;PDF (*.pdf);;All Supported (*.png *.jpg *.jpeg *.svg *.pdf);;All Files (*)"
         default_name = (self.file_name or "plot") + "_figure.png"
-        file_path, selected_filter = QFileDialog.getSaveFileName(self, "Save figure", default_name, filters)
+        # Reuse the folder remembered by the other save dialogs.
+        settings = QSettings("EZPDF", "EZPDF")
+        last_dir = settings.value("last_dir", "") or ""
+        start_path = os.path.join(last_dir, default_name) if last_dir else default_name
+        file_path, selected_filter = QFileDialog.getSaveFileName(self, "Save figure", start_path, filters)
         if not file_path: return
         ext = os.path.splitext(file_path)[1].lower()
         if not ext:
@@ -1351,6 +1355,9 @@ class PlotWindow(QMainWindow):
         if not selected:
             QMessageBox.information(self, "No plots selected", "Please enable at least one plot to save.")
             return
+        # Remember this folder for the next save.
+        settings.setValue("last_dir", os.path.dirname(file_path))
+        settings.sync()
         union_rect = self.main_widget.rect()
         if ext == ".svg" and QSvgGenerator is not None:
             gen = QSvgGenerator();
