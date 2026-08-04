@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QDoubleValidator, QFont
 from .ui_helpers import add_slider_field, add_form_row
-from model.helpers import preview_composition, extract_data
+from model.helpers import preview_composition, extract_data, parse_composition, composition_string_from_xyz
 from model.math_functions import reset_warning_history
 from controller.graph_controller import update_current_graph, calculate_compton
 
@@ -31,6 +31,12 @@ class ControlPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__()
         self.main_window = parent
+
+        # The .xyz file that last auto-filled the Compton composition, and the
+        # composition string it produced. Used so the Compton Calculate button
+        # can ask which source to use even after the file is deselected.
+        self._compton_xyz_path = None
+        self._compton_xyz_comp = None
 
         fixed_font = QFont()
         fixed_font.setPointSize(9)
@@ -673,6 +679,11 @@ class ControlPanel(QWidget):
 
         def run_compton_calculation():
             try:
+                # If an .xyz file is selected and the composition field no
+                # longer matches it, ask whether to use the file or the typed
+                # composition. Returns False if the user cancels.
+                if not self._resolve_compton_composition_source():
+                    return
                 calculate_compton(self)
             except Exception as e:
                 QMessageBox.critical(
@@ -738,6 +749,117 @@ class ControlPanel(QWidget):
         """Preview for the Compton-tab composition field."""
         self._apply_composition_preview(self.compton_composition_input,
                                         self.compton_composition_example_label)
+
+    def _selected_xyz_path(self):
+        """Return the path of the single selected .xyz file, or None.
+
+        None is returned when the file panel is unavailable, nothing (or more
+        than one file) is selected, or the selection is not an .xyz file.
+        """
+        mw = getattr(self, "main_window", None)
+        panel = getattr(mw, "file_panel", None) if mw else None
+        if panel is None:
+            return None
+        try:
+            items = panel.get_selected_file_paths()
+        except Exception:
+            return None
+        if not items or len(items) != 1:
+            return None
+        try:
+            path = items[0].data(0, Qt.ItemDataRole.UserRole)
+        except Exception:
+            return None
+        if not path or os.path.splitext(path)[1].lower() != ".xyz":
+            return None
+        return path
+
+    @staticmethod
+    def _compositions_equal(a, b):
+        """True if two composition strings have the same elements and amounts.
+
+        Whitespace and writing style are ignored (both are parsed first), so
+        'Co2O3P1' and 'Co 2 O 3 P 1' are equal. Unlike a normalised compare,
+        a scaled edit such as 'Co4O6P2' counts as *different*, so changing the
+        numbers always prompts the user.
+        """
+        try:
+            da = parse_composition(a)
+            db = parse_composition(b)
+        except Exception:
+            return False
+        if set(da.keys()) != set(db.keys()):
+            return False
+        for el in da:
+            if abs(float(da[el]) - float(db[el])) > 1e-9:
+                return False
+        return True
+
+    def _resolve_compton_composition_source(self):
+        """Decide which composition the Compton calculation should use.
+
+        The reference is the .xyz file that auto-filled the composition: the
+        one currently selected, or failing that the last one remembered (so a
+        deselected file still prompts). Behaviour:
+
+        - No reference .xyz: use the composition field as-is.
+        - Field empty: fill it from the file.
+        - Field matches the file: use it (no prompt).
+        - Field differs: ask whether to compute from the file or from the
+          typed composition.
+
+        Returns True to proceed, False if the user cancels.
+        """
+        xyz_path = self._selected_xyz_path()
+        if not xyz_path:
+            remembered = getattr(self, "_compton_xyz_path", None)
+            if remembered and os.path.isfile(remembered):
+                xyz_path = remembered
+        if not xyz_path:
+            return True
+
+        xyz_comp = composition_string_from_xyz(xyz_path)
+        if not xyz_comp:
+            # Couldn't read a composition from the file; fall back to the field.
+            return True
+
+        field_text = self.compton_composition_input.text().strip()
+
+        if not field_text:
+            self.compton_composition_input.setText(xyz_comp)
+            self._compton_xyz_path = xyz_path
+            self._compton_xyz_comp = xyz_comp
+            return True
+
+        if self._compositions_equal(field_text, xyz_comp):
+            return True
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Which composition to use?")
+        box.setText(
+            "The composition differs from the selected .xyz file.\n\n"
+            f"File:  {os.path.basename(xyz_path)}  →  {xyz_comp}\n"
+            f"Entered:  {field_text}\n\n"
+            "Calculate from the .xyz file or from the composition you entered?")
+        from_file_btn = box.addButton("From .xyz file", QMessageBox.ButtonRole.AcceptRole)
+        from_input_btn = box.addButton("From entered composition", QMessageBox.ButtonRole.AcceptRole)
+        cancel_btn = box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(from_input_btn)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is cancel_btn:
+            return False
+        if clicked is from_file_btn:
+            self.compton_composition_input.setText(xyz_comp)
+            self._compton_xyz_path = xyz_path
+            self._compton_xyz_comp = xyz_comp
+        else:
+            # User chose their own composition: stop prompting for this file.
+            self._compton_xyz_path = None
+            self._compton_xyz_comp = None
+        return True
 
     def get_basic_parameters(self):
         if self.format_2theta.isChecked():

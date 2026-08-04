@@ -8,7 +8,7 @@ import numpy as np
 import pyqtgraph as pg
 
 # PySide6 Imports
-from PySide6.QtCore import Qt, QPoint, QSize, QSizeF, QMarginsF
+from PySide6.QtCore import Qt, QPoint, QSize, QSizeF, QMarginsF, QSettings
 from PySide6.QtGui import (
     QAction, QFont, QImage, QPainter, QColor, QPageSize, QCursor, QPdfWriter
 )
@@ -200,6 +200,10 @@ class PlotWindow(QMainWindow):
 
         # Stores the QTreeWidgetItem(s) associated with this window
         self.associated_items = None
+
+        # True when the window currently shows a computed Compton curve
+        # (set by calculate_compton). Reset whenever a file is plotted.
+        self.is_compton = False
 
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
@@ -589,6 +593,7 @@ class PlotWindow(QMainWindow):
                   list_Sq=None, Fq_smoothed=None, mean_sq_fi=None, sq_mean_fi=None,
                   r_smoothed=None, G_smoothed=None, title="", bring_front=True):
         self._reset_intermediates()
+        self.is_compton = False
 
         self.cached_xs = self.cached_ys = self.cached_titles = None
 
@@ -693,6 +698,7 @@ class PlotWindow(QMainWindow):
 
     def plot_multiple(self, list_of_xs, list_of_ys, titles=None, bring_front=True):
         self._reset_intermediates()
+        self.is_compton = False
 
         if bring_front:
             self.bring_to_front()
@@ -1054,14 +1060,17 @@ class PlotWindow(QMainWindow):
             border:1px solid #777; background:#fff; }
         QCheckBox::indicator:checked { background:#444; }
         """
+        is_compton = getattr(self, "is_compton", False)
         is_multi_plot = hasattr(self, 'cached_xs') and self.cached_xs is not None
         is_single_exp = False
         if not is_multi_plot:
             is_single_exp = (self.raw_iq is not None and self.raw_iq[0] is not None) or \
                             (self.background_data is not None and self.background_data[0] is not None) or \
                             (self.mean_sq_fi is not None)
-        is_experimental = is_multi_plot or is_single_exp
-        is_calculated = not is_experimental
+        is_experimental = (is_multi_plot or is_single_exp) and not is_compton
+        # A Compton curve is neither experimental data nor calculated (.xyz)
+        # output; it has its own save option below.
+        is_calculated = not is_experimental and not is_compton
         v.addWidget(QLabel("--- Experimental Data ---", dlg))
         checks_core = []
         core_labels = [("I(q)", 0, ".iq"), ("S(q)", 1, ".sq"), ("F(q)", 2, ".fq"), ("G(r)", 3, ".gr")]
@@ -1111,6 +1120,23 @@ class PlotWindow(QMainWindow):
                     cb.setEnabled(False)
                 v.addWidget(cb)
                 checks_extras.append(cb)
+        # --- Compton ---
+        # The Compton curve lives in the I(q) panel (index 0). Only enabled
+        # when the window is currently showing a computed Compton curve.
+        v.addWidget(QLabel("--- Compton ---", dlg))
+        cb_compton = QCheckBox("Compton", dlg)
+        cb_compton.setStyleSheet(CB_ROUND_STYLE)
+        cb_compton.setChecked(False)
+        compton_has_data = False
+        try:
+            compton_has_data = (self.xs is not None and len(self.xs) > 0
+                                and self.xs[0] is not None and len(self.xs[0]) > 0)
+        except Exception:
+            compton_has_data = False
+        if not (is_compton and compton_has_data):
+            cb_compton.setEnabled(False)
+        v.addWidget(cb_compton)
+
         v.addWidget(QLabel("--- Calculated (.xyz) ---", dlg))
         checks_cal = []
         cal_labels = [("calI(q)", 0, ".caliq"), ("calS(q)", 1, ".calsq"), ("calF(q)", 2, ".calfq"),
@@ -1140,11 +1166,48 @@ class PlotWindow(QMainWindow):
             selected_core = [i for i, cb in enumerate(checks_core) if cb.isChecked()]
             selected_extras = [i for i, cb in enumerate(checks_extras) if cb.isChecked()]
             selected_cal = [i for i, cb in enumerate(checks_cal) if cb.isChecked()]
-            if not selected_core and not selected_extras and not selected_cal:
+            selected_compton = cb_compton.isChecked()
+            if not selected_core and not selected_extras and not selected_cal and not selected_compton:
                 QMessageBox.information(self, "Nothing selected", "Please select at least one dataset to save.")
                 return
-            folder = QFileDialog.getExistingDirectory(self, "Select folder to save")
+
+            # Remember the last folder used for saving, shared with the other
+            # save dialogs (same QSettings key), so every save reopens where
+            # the previous one left off.
+            settings = QSettings("EZPDF", "EZPDF")
+            last_dir = settings.value("last_dir", "") or ""
+
+            # Compton is a single file, so let the user type the file name
+            # directly (choosing the folder at the same time). On a Compton
+            # plot the other datasets are disabled, so nothing else can be
+            # selected here.
+            if selected_compton:
+                default_name = self.file_name or "compton"
+                if default_name.lower().endswith(".compton"):
+                    default_name = default_name[:-len(".compton")]
+                start_path = os.path.join(last_dir, default_name + ".compton") if last_dir \
+                    else default_name + ".compton"
+                path, _ = QFileDialog.getSaveFileName(
+                    self, "Save Compton File", start_path,
+                    "Compton Files (*.compton)")
+                if not path:
+                    return
+                if not path.lower().endswith(".compton"):
+                    path += ".compton"
+                written = self._write_compton_file(path)
+                if written:
+                    settings.setValue("last_dir", os.path.dirname(path))
+                    settings.sync()
+                    QMessageBox.information(self, "Saved", f"Compton file saved to:\n{path}")
+                else:
+                    QMessageBox.warning(self, "Save failed", "No Compton data was available to save.")
+                dlg.accept()
+                return
+
+            folder = QFileDialog.getExistingDirectory(self, "Select folder to save", last_dir)
             if not folder: return
+            settings.setValue("last_dir", folder)
+            settings.sync()
             written = self._save_selected_data(folder, selected_core, selected_extras, selected_cal)
             QMessageBox.information(self, "Saved", f"{written} file(s) saved to:\n{folder}")
             dlg.accept()
@@ -1152,6 +1215,23 @@ class PlotWindow(QMainWindow):
         ok.clicked.connect(do_save)
         cancel.clicked.connect(dlg.reject)
         dlg.exec()
+
+    def _write_compton_file(self, path):
+        """Write the Compton I(q) curve (panel 0) to a .compton file.
+
+        Returns 1 on success, 0 if there is no data or the write fails.
+        """
+        try:
+            x = self.xs[0] if (self.xs is not None and len(self.xs) > 0) else None
+            y = self.ys[0] if (self.ys is not None and len(self.ys) > 0) else None
+            if x is None or y is None or len(x) == 0 or len(y) == 0:
+                return 0
+            n = min(len(x), len(y))
+            arr = np.column_stack([x[:n], y[:n]])
+            np.savetxt(path, arr, fmt="%.10g", header="x y", comments="")
+            return 1
+        except Exception:
+            return 0
 
     def _save_selected_data(self, folder, selected_core, selected_extras, selected_cal=None):
         def _write_xy(path, x, y):

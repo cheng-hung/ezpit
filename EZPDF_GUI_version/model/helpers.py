@@ -417,6 +417,28 @@ def load_atom_name_positions(file_path):
     return atom_names, atom_positions
 
 
+def composition_string_from_xyz(file_path):
+    """Build a compact composition string (e.g. 'Co38O119P1') from an .xyz file.
+
+    Counts each unique element in the file's atom list. Returns None if the
+    file cannot be read or contains no recognisable atoms. The result parses
+    back cleanly with parse_composition().
+    """
+    try:
+        atom_names, _ = load_atom_name_positions(file_path)
+    except Exception:
+        return None
+
+    if not atom_names:
+        return None
+
+    unique_names, counts, _ = group_atoms(atom_names)
+    parts = []
+    for name, count in zip(unique_names, counts):
+        parts.append(f"{name}{int(count)}")
+    return "".join(parts) if parts else None
+
+
 def get_q_range(qmin, qmax, len_data):
     return np.linspace(qmin, qmax, len_data, endpoint=False)
 

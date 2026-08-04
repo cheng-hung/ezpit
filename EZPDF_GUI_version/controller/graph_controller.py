@@ -265,9 +265,72 @@ def update_current_graph(selected_items, control_panel, plot_window):
 
 
 def calculate_compton(control_panel):
+    """Compute the Compton scattering curve and plot it directly on the
+    EZPDF Plot window's I(q) panel.
+
+    Previously this opened a save dialog and wrote a .compton file. Now
+    pressing "Calculate Compton" (after typing a composition into the
+    Compton tab) shows the result immediately in the I(q) panel, matching
+    how a loaded .compton file is displayed.
+    """
     q_range, list_compton_scat = get_compton_values(control_panel)
 
-    list_compton_scat = np.array(list_compton_scat)
-    q_range = np.array(q_range)
+    q_range = np.asarray(q_range, dtype=float)
+    list_compton_scat = np.asarray(list_compton_scat, dtype=float)
 
-    write_compton_file(q_range, list_compton_scat, control_panel)
+    # PlotWindow.plot_data() expects a 4-panel structure
+    # (I(q), S(q), F(q), G(r)). A Compton curve only has an I(q)-type
+    # panel, so populate index 0 and leave the rest empty; the empty
+    # panels are hidden via enable_graphs() below. This mirrors the
+    # .compton file-loading path in get_graph_data().
+    xs = [q_range, [], [], []]
+    ys = [list_compton_scat, [], [], []]
+
+    main_window = getattr(control_panel, "main_window", None)
+
+    # Choose the target window. Respect the "Open in New Graphs" checkbox if
+    # present; otherwise reuse the current EZPDF Plot window, creating one
+    # when none is open/visible.
+    plot_window = getattr(main_window, "plot_window", None) if main_window else None
+    use_new = bool(getattr(control_panel, "new_window_checkbox", None)
+                   and control_panel.new_window_checkbox.isChecked())
+
+    if use_new or plot_window is None or not plot_window.isVisible():
+        plot_window = PlotWindow()
+        plot_window.show()
+
+    composition = control_panel.get_compton_parameters().get("composition", "").strip()
+    title = f"Compton ({composition})" if composition else "Compton"
+
+    plot_window.plot_data(
+        xs, ys, None, None, None, None,
+        None, None, None, None, None, None, title
+    )
+    plot_window.enable_graphs(enable_iq=True, enable_sq=False,
+                              enable_fq=False, enable_gr=False)
+
+    # Flag this window as showing a Compton curve. plot_data()/plot_multiple()
+    # reset this to False, so it stays True only until the next file is drawn.
+    # The "Select data to save" dialog uses it to offer a Compton (.compton)
+    # save option.
+    plot_window.is_compton = True
+
+    # This window now shows a computed Compton curve, not a loaded file.
+    # Dropping the file association stops later parameter-driven
+    # send_update() calls from replotting a previous file over the curve.
+    plot_window.associated_items = None
+
+    # Register/activate the window with the main window and match the theme.
+    if main_window is not None:
+        main_window.plot_window = plot_window
+        windows = getattr(main_window, "plot_windows", None)
+        if windows is None:
+            main_window.plot_windows = windows = []
+        if plot_window not in windows:
+            windows.append(plot_window)
+        try:
+            plot_window.apply_theme(getattr(main_window, "is_dark_mode", False))
+        except Exception:
+            pass
+
+    return plot_window
