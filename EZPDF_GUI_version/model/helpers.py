@@ -380,41 +380,171 @@ def extract_data(path):
         return
 
 
-def load_atom_name_positions(file_path):
-    """
-    Loads atom names and positions from a file, starting from the detected data start.
+_AFF_VALID_SYMBOLS = None
 
-    Parameters
-    ==========
-    file_path: str
-        Path to the text or .xyz file.
 
-    Returns
-    =======
-    tuple:
-        - atom_names: List[str] – list of atom names
-        - atom_positions: np.ndarray – array of atomic positions with shape (n_atoms, 3)
-    """
+def _get_aff_valid_symbols():
+    """Accepted species symbols (elements and ions) from the aff form-factor
+    table, e.g. ['H', ..., 'Fe2+', 'O2-', ...]. Cached after first read.
+    Returns None if the table can't be loaded."""
+    global _AFF_VALID_SYMBOLS
+    if _AFF_VALID_SYMBOLS is None:
+        try:
+            from model.elem_data import ElementData
+            _AFF_VALID_SYMBOLS = [str(s).strip() for s in ElementData().aff_element['element']]
+        except Exception:
+            _AFF_VALID_SYMBOLS = []
+    return _AFF_VALID_SYMBOLS or None
+
+
+def _load_atom_name_positions_legacy(file_path):
+    """Positional fallback parser: skips header via detect_data_start and takes
+    the last three columns as x, y, z. Used only when the form-factor table is
+    unavailable."""
     start_line = detect_data_start(file_path)
-
     with open(file_path, 'r') as f:
         lines = f.readlines()[start_line:]
-
     atom_names = []
     atom_positions = []
-
     for line in lines:
         parts = line.strip().split()
         if len(parts) < 4:
-            continue  # Skip incomplete lines
+            continue
         atom_names.append(parts[0])
         try:
             atom_positions.append([float(x) for x in parts[-3:]])
         except ValueError:
-            continue  # Skip lines with non-numeric coordinates
+            continue
+    return atom_names, np.array(atom_positions)
 
-    atom_positions = np.array(atom_positions)
-    return atom_names, atom_positions
+
+def load_atom_name_positions(file_path, valid_symbols=None):
+    """
+    Load atom names and (x, y, z) positions from an .xyz file, using the atomic
+    form-factor table as the reference for what counts as an atom.
+
+    A line is treated as an atom only when:
+      (1) it has at least 4 whitespace-separated tokens,
+      (2) its first token is an accepted species symbol (an element OR ion
+          present in the aff form-factor table), and
+      (3) the three tokens immediately after the symbol parse as floats.
+
+    The stored symbol is normalised to the canonical table entry (exact match
+    first, so ions like 'Fe2+'/'O2-' are kept; otherwise the element part is
+    case-normalised, e.g. 'FE' -> 'Fe'). This guarantees each atom maps to the
+    correct form factor. Coordinates are read from the three columns right after
+    the symbol, so trailing columns (charge, force, ...) are ignored.
+
+    Header handling is automatic and works whether the file has many header
+    lines, a single comment line, or none at all:
+      * Standard .xyz: if an atom-count line (a line holding a single positive
+        integer N) is found and is followed by a comment line and then N clean
+        atom lines, exactly those N atoms are read. The comment line is skipped
+        unconditionally, so it is never mistaken for an atom even if it happens
+        to look like one.
+      * Otherwise (headerless or non-standard files): every atom-like line in
+        the file is taken and everything else is skipped.
+
+    Parameters
+    ==========
+    file_path : str
+        Path to the .xyz file.
+    valid_symbols : iterable of str, optional
+        Accepted species symbols. When omitted, they are taken from the aff
+        form-factor table automatically.
+
+    Returns
+    =======
+    tuple:
+        - atom_names: List[str] – canonical species symbols
+        - atom_positions: np.ndarray – (n_atoms, 3) float array
+    """
+    if valid_symbols is None:
+        valid_symbols = _get_aff_valid_symbols()
+
+    # If the form-factor table can't be read, fall back to positional parsing
+    # so the app still works rather than failing outright.
+    if not valid_symbols:
+        return _load_atom_name_positions_legacy(file_path)
+
+    symbol_set = set(valid_symbols)
+
+    def normalize_symbol(tok):
+        # Exact match first (keeps ions as written in the table), then a
+        # case-normalised element part (e.g. 'FE' -> 'Fe', 'fe2+' -> 'Fe2+').
+        if tok in symbol_set:
+            return tok
+        cap = tok[:1].upper() + tok[1:].lower()
+        if cap in symbol_set:
+            return cap
+        return None
+
+    def atom_of(line):
+        # Return (symbol, [x, y, z]) if the line is a clean atom line, else None.
+        parts = line.split()
+        if len(parts) < 4:
+            return None
+        symbol = normalize_symbol(parts[0])
+        if symbol is None:
+            return None
+        try:
+            xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+        except ValueError:
+            return None
+        return symbol, xyz
+
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+
+    # --- Preferred path: standard .xyz with a count line ---------------------
+    # The line after the count is the comment BY SPEC, so it is skipped
+    # unconditionally (never read as an atom, even if it looks like one).
+    n_lines = len(lines)
+    for i in range(n_lines):
+        toks = lines[i].split()
+        if len(toks) != 1 or not toks[0].isdigit():
+            continue
+        n_atoms = int(toks[0])
+        if n_atoms <= 0:
+            continue
+        block = []
+        k = i + 2  # skip the count line (i) and the comment line (i + 1)
+        while k < n_lines and len(block) < n_atoms:
+            if lines[k].strip() == "":   # tolerate blank lines within the block
+                k += 1
+                continue
+            a = atom_of(lines[k])
+            if a is None:                # not a clean atom where one was expected
+                break
+            block.append(a)
+            k += 1
+        if len(block) == n_atoms:
+            names = [b[0] for b in block]
+            pos = [b[1] for b in block]
+            return names, np.array(pos, dtype=float)
+        # Count line didn't lead to a clean N-atom block; keep looking, then
+        # fall through to the content scan below.
+
+    # --- Fallback: headerless / non-standard files ---------------------------
+    # Take every atom-like line and skip everything else (any number of header
+    # or footer lines, in any style).
+    atom_names = []
+    atom_positions = []
+    for line in lines:
+        a = atom_of(line)
+        if a is None:
+            continue
+        atom_names.append(a[0])
+        atom_positions.append(a[1])
+
+    if not atom_positions:
+        raise ValueError(
+            "No atom coordinates found in '{0}'. Expected lines of the form "
+            "'Element x y z' where the symbol is present in the atomic "
+            "form-factor table.".format(file_path)
+        )
+
+    return atom_names, np.array(atom_positions, dtype=float)
 
 
 def composition_string_from_xyz(file_path):

@@ -2,7 +2,6 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from scipy import interpolate
 import io
-import re  # [EN] (kept) / [KR] 문자열 처리용
 from math import factorial  # [EN] Mathematical factorial function / [KR] 수학 팩토리얼 함수
 # --- [EN] Added imports for Whittaker smoothing / [KR] Whittaker 스무딩 기능을 위해 추가된 라이브러리 ---
 import scipy.sparse as sp  # [EN] Sparse matrix package for efficient memory usage / [KR] 메모리를 효율적으로 쓰는 희소 행렬 패키지
@@ -10,38 +9,115 @@ from scipy.linalg import cho_factor, cho_solve, LinAlgError  # [EN] Linear algeb
 from collections import Counter  # [EN] Dict subclass for counting hashable objects / [KR] 리스트 내 요소의 개수를 세는 도구
 
 
-def load_atom_name_positions(file_path):
+def load_atom_name_positions(file_path, valid_symbols):
     """
-    [EN] Load atom names and their (x, y, z) positions from a file.
-    [KR] 파일에서 원자 이름과 (x, y, z) 좌표를 불러옵니다.
+    [EN] Load atom names and (x, y, z) positions from an .xyz file.
+         Header lines are skipped AUTOMATICALLY and robustly — any number of them,
+         in any style. A line is treated as an atom ONLY when:
+             (1) it has at least 4 whitespace-separated tokens, AND
+             (2) the first token is an accepted species symbol, AND
+             (3) the next three tokens parse as floats (x, y, z).
+
+         ACCEPTED SPECIES (valid_symbols) — REQUIRED:
+           Pass the element/ion list from your atomic form-factor table, e.g.
+           the result of load_atom_names(aff_element_file). This list defines
+           exactly which symbols count as atoms, so IONS present in the table
+           (e.g. 'Fe2+', 'O2-', 'Cl1-') are recognised and matched to the
+           correct form factor. Matching first tries the exact token, then a
+           case-normalised element part (e.g. 'FE' -> 'Fe').
+
+         Everything else (atom-count line, comment/title lines, blank lines,
+         provenance headers, energy lines, etc.) is skipped. Extra columns after
+         x, y, z (charge, force, ...) are ignored.
+    [KR] .xyz 파일에서 원자 이름과 (x, y, z) 좌표를 불러옵니다.
+         헤더 줄은 몇 줄이든, 어떤 형식이든 자동으로 견고하게 건너뜁니다.
+         다음을 모두 만족할 때만 원자 줄로 인식합니다:
+             (1) 토큰 4개 이상, (2) 첫 토큰이 허용된 화학종 기호,
+             (3) 다음 3개 토큰이 실수(x, y, z).
+
+         허용 화학종 (valid_symbols) — 필수:
+           원자 form-factor 테이블의 원소/이온 목록(예:
+           load_atom_names(aff_element_file) 결과)을 넘겨야 합니다. 이 목록이
+           원자 기준이 되며, 테이블에 있는 이온('Fe2+', 'O2-', 'Cl1-' 등)도
+           인식되어 올바른 form factor에 매칭됩니다. 매칭은 먼저 토큰 원문,
+           다음으로 대소문자 보정된 원소부(예: 'FE' -> 'Fe')를 시도합니다.
+
+         그 외(개수 줄, 주석/제목, 빈 줄, 헤더, 에너지 줄 등)는 건너뜁니다.
+         x, y, z 뒤 추가 컬럼(전하, 힘 등)은 무시합니다.
 
     Args:
-        file_path (str): [EN] Path to the file / [KR] 파일 경로
+        file_path (str): [EN] Path to the .xyz file / [KR] .xyz 파일 경로
+        valid_symbols (iterable of str): [EN] Accepted species symbols
+            (element/ion list from the form-factor table). REQUIRED.
+            [KR] 허용 화학종 기호(form-factor 테이블의 원소/이온 목록). 필수.
 
     Returns:
-        atom_names (list): [EN] List of atom names (e.g., ['O', 'H']) / [KR] 원자 이름 리스트
-        atom_positions (numpy.ndarray): [EN] Array of coordinates (N rows, 3 columns) / [KR] (N, 3) 크기의 좌표 배열
+        atom_names (list[str])        : [EN] Species symbols / [KR] 화학종 기호 리스트
+        atom_positions (numpy.ndarray): [EN] (N, 3) float array / [KR] (N, 3) 실수 배열
     """
     with open(file_path, 'r') as f:
         lines = f.readlines()
+
+    # [EN] Accepted-symbol set from the form-factor table (may contain ions).
+    # [KR] form-factor 테이블의 허용 기호 집합 (이온 포함 가능).
+    symbol_set = set(valid_symbols)
+
+    def normalize_symbol(tok):
+        # [EN] Canonical accepted symbol for tok, or None.
+        #      1) exact match (keeps ions as in the table, e.g. 'Fe2+')
+        #      2) case-normalised element part (e.g. 'FE'->'Fe')
+        # [KR] tok의 표준 허용 기호(없으면 None).
+        #      1) 정확 일치(이온을 테이블 그대로), 2) 대소문자 보정 원소부
+        if tok in symbol_set:
+            return tok
+        cap = tok[:1].upper() + tok[1:].lower()
+        if cap in symbol_set:
+            return cap
+        return None
+
     atom_names = []
     atom_positions = []
     for line in lines:
         parts = line.split()
-        atom_names.append(parts[0])
-        # [EN] Convert string coordinates to float / [KR] 문자열 좌표를 실수형으로 변환
-        atom_positions.append([float(x) for x in parts[1:]])
-    atom_positions = np.array(atom_positions)
+
+        # [EN] (1) Need species symbol + at least 3 coordinates.
+        # [KR] (1) 화학종 기호 + 좌표 3개 이상 필요.
+        if len(parts) < 4:
+            continue
+
+        # [EN] (2) First token must be an accepted species symbol.
+        # [KR] (2) 첫 토큰은 허용된 화학종 기호여야 함.
+        symbol = normalize_symbol(parts[0])
+        if symbol is None:
+            continue
+
+        # [EN] (3) Next three tokens must parse as floats.
+        # [KR] (3) 다음 3개 토큰은 실수로 파싱되어야 함.
+        try:
+            xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+        except ValueError:
+            continue
+
+        atom_names.append(symbol)
+        atom_positions.append(xyz)
+
+    if not atom_positions:
+        raise ValueError(
+            "No atom coordinates found in '{0}'. Expected lines of the form "
+            "'Element x y z' (e.g. 'C 1.23 4.56 7.89'), where the symbol is in "
+            "your form-factor table (valid_symbols).".format(file_path)
+        )
+
+    atom_positions = np.array(atom_positions, dtype=float)
     return atom_names, atom_positions
 
 
 def load_atom_names(file_path):
     """
-    [EN] Load only a list of atom names from a file.
-    [KR] 파일에서 원자 이름 목록만 불러옵니다.
-
-    Returns:
-        atom_list (list): [EN] List of strings / [KR] 문자열 리스트
+    database_atom_names = losa.load_atom_names(compton_aff_element_file)
+    print('database_atom_names = ', database_atom_names)
+    print all atom names in compton_element_only.txt
+    database_atom_names =  ['H', 'He', 'Li', 'Be',,,,,,,,,,,'U']
     """
     with open(file_path, 'r') as f:
         atom_list = [line.strip() for line in f.readlines() if line.strip() != '']
@@ -366,14 +442,33 @@ def __cal_compton_fi(compton_scattering_factors, q):
 
 
 def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors,
-                    atomic_number, qmin, qmax, qstep, wavelength, alpha):
+                    atomic_number, qmin, qmax, qstep, wavelength, alpha, weights=None):
     """
     [EN] Calculate total experimental Compton scattering intensity.
          Includes Breit-Dirac recoil factor correction.
+         Supports BOTH integer and fractional compositions:
+           - Integer (default): pass 'atom_indices' (one entry per atom); each
+             unique element is counted with weight 1 per atom.
+           - Fractional: pass 'weights' (per-unique-element amounts from
+             composition_weights). The Compton average is normalised by the total
+             weight, so fractional amounts (e.g. Li0.2Co0.36...) are used directly
+             and give the same result as their integer-scaled form.
     [KR] 전체 실험적 콤프턴 산란 강도를 계산합니다.
          Breit-Dirac 반동(Recoil) 보정이 포함됩니다.
+         정수/소수 조성 모두 지원합니다:
+           - 정수(기본): 'atom_indices' 전달 (원자당 항목, 원자별 weight=1).
+           - 소수: composition_weights의 'weights' 전달 (고유 원소별 양).
+             Compton 평균은 총 weight로 정규화되므로 소수 조성(예: Li0.2Co0.36...)을
+             그대로 사용해도 정수배 형태와 동일한 결과를 줍니다.
 
     Args:
+        atom_indices (array): [EN] Per-atom element index (integer composition)
+                              [KR] 원자별 원소 인덱스 (정수 조성)
+        weights (array, optional): [EN] Per-unique-element amounts (fractional
+                                   composition). If given, used instead of
+                                   atom_indices for the averaging.
+                                   [KR] 고유 원소별 양 (소수 조성). 주어지면
+                                   평균 계산에서 atom_indices 대신 사용됨.
         wavelength (float): [EN] X-ray wavelength (Angstrom) / [KR] X선 파장
         alpha (float): [EN] Recoil parameter (usually 2 or 3) / [KR] 반동 파라미터
 
@@ -386,27 +481,47 @@ def compton_cal_exp(atom_indices, compton_scat_parms, compton_scattering_factors
     h = 6.62607015e-14  # [EN] Planck constant / [KR] 플랑크 상수
     part_A = 2.0 * h * wavelength / me / C
 
-    num_atom = len(atom_indices)
     num_fact = len(compton_scattering_factors)
     q_range = np.arange(qmin, qmax, qstep)
     list_compton_scat = []
 
+    # [EN] Determine per-unique-element weights c_k and the total weight.
+    #      - weights given  → fractional composition, use as-is.
+    #      - else           → integer composition, count atoms per element from
+    #                         atom_indices (bincount over 0..num_fact-1).
+    # [KR] 고유 원소별 weight c_k와 총합을 결정.
+    #      - weights 있음 → 소수 조성, 그대로 사용.
+    #      - 없음         → 정수 조성, atom_indices에서 원소별 원자 수를 셈.
+    if weights is not None:
+        c_k = np.asarray(weights, dtype=float)                       # (num_fact,)
+    else:
+        c_k = np.bincount(np.asarray(atom_indices),
+                          minlength=num_fact).astype(float)          # (num_fact,)
+    total_c = np.sum(c_k)                                            # Σ c_k
+
+    # [EN] Pre-fetch atomic numbers per unique element as a float array.
+    # [KR] 고유 원소별 원자번호를 실수 배열로 준비.
+    Z_k = np.asarray(atomic_number, dtype=float)                    # (num_fact,)
+
     for q in q_range:
-        atomic_number_sum = 0.0
-        fi2_sum = 0.0
         part_B = (q / (4.0 * np.pi)) ** 2.0
-        # [EN] Breit-Dirac recoil factor calculation
-        # [KR] Breit-Dirac 반동 인자 계산
+        # [EN] Breit-Dirac recoil factor / [KR] Breit-Dirac 반동 인자
         BD_recoil_fact = (part_A * part_B + 1) ** (-alpha)
-        list_fi = []
-        for k in range(num_fact):
-            list_fi.append(__cal_compton_fi(compton_scat_parms[atomic_number[k] - 1], q))
-        list_fi = np.asarray(list_fi)
-        for i, idx in enumerate(atom_indices):
-            fi = list_fi[idx]
-            atomic_number_sum = atomic_number_sum + atomic_number[idx]
-            fi2_sum = fi2_sum + (fi ** 2) / atomic_number[idx]
-        compton_scat = BD_recoil_fact * (1 / num_atom * atomic_number_sum - 1 / num_atom * fi2_sum)
+
+        # [EN] Compton form factors for all unique elements at this q.
+        # [KR] 이 q에서 모든 고유 원소의 Compton form factor.
+        list_fi = np.array([__cal_compton_fi(compton_scat_parms[int(atomic_number[k]) - 1], q)
+                            for k in range(num_fact)])
+
+        # [EN] Weighted sums over unique elements (c_k as the amount of each element).
+        #      Σ c_k·Z_k  and  Σ c_k·(f_k²/Z_k), both normalised by Σ c_k.
+        # [KR] 고유 원소에 대한 가중 합 (c_k = 각 원소의 양).
+        #      Σ c_k·Z_k, Σ c_k·(f_k²/Z_k)를 Σ c_k로 정규화.
+        atomic_number_sum = np.sum(c_k * Z_k)
+        fi2_sum = np.sum(c_k * (list_fi ** 2) / Z_k)
+
+        compton_scat = BD_recoil_fact * (atomic_number_sum / total_c
+                                         - fi2_sum / total_c)
         list_compton_scat.append(compton_scat)
     return q_range, list_compton_scat
 
@@ -1449,4 +1564,3 @@ def smooth_with_noise_gain(y, gain=1e-4, order=2):
     """
     lambda_ = noise_gain_to_lambda(gain, order)
     return smooth_whittaker(y, lambda_, order)
-

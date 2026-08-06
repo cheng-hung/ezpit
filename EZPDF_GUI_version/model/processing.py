@@ -117,10 +117,17 @@ def get_smooth_whittaker(y, control_panel):
 
 
 def get_xyz_graphs(atom_names, atom_positions, control_panel):
-    atom_indices = group_atoms(atom_names)[2]
+    # cal_Sq() looks scattering factors up by *unique-element* index
+    # (atom_indices maps each atom to its element in unique_atom_names), so the
+    # scattering-factor table must have one row per unique element in that same
+    # order. Passing the full per-atom list here would return one row per atom
+    # and the unique-index lookup would then read the wrong rows, assigning the
+    # wrong form factor to any element whose first appearance in the file does
+    # not line up with its unique index (e.g. O and I getting C's form factor).
+    unique_atom_names, _, atom_indices = group_atoms(atom_names)
     cal_parameters = control_panel.get_cal_parameters()
     atom_distance_matrix = create_atom_distance_matrix(atom_positions)
-    scattering_factors = get_aff_scattering_factors(atom_names)
+    scattering_factors = get_aff_scattering_factors(unique_atom_names)
     qmin = float(cal_parameters['qmin'])
     qmax = float(cal_parameters['qmax'])
     qstep = float(cal_parameters.get('qstep', 0.05))

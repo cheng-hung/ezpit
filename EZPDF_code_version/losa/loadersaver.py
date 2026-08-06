@@ -1,5 +1,4 @@
 import os
-import re
 from collections import Counter
 import numpy as np
 
@@ -153,26 +152,106 @@ def composition_weights(composition):
     return names, weights
 
 
-def load_atom_name_positions(file_path):
+def load_atom_name_positions(file_path, valid_symbols):
     """
-    Parameters
-    ==========
-    file_path: str
-        Path to text file
+    [EN] Load atom names and (x, y, z) positions from an .xyz file.
+         Header lines are skipped AUTOMATICALLY and robustly — any number of them,
+         in any style. A line is treated as an atom ONLY when:
+             (1) it has at least 4 whitespace-separated tokens, AND
+             (2) the first token is an accepted species symbol, AND
+             (3) the next three tokens parse as floats (x, y, z).
 
-    Returns
-    =======
+         ACCEPTED SPECIES (valid_symbols) — REQUIRED:
+           Pass the element/ion list from your atomic form-factor table, e.g.
+           the result of load_atom_names(aff_element_file). This list defines
+           exactly which symbols count as atoms, so IONS present in the table
+           (e.g. 'Fe2+', 'O2-', 'Cl1-') are recognised and matched to the
+           correct form factor. Matching first tries the exact token, then a
+           case-normalised element part (e.g. 'FE' -> 'Fe').
 
+         Everything else (atom-count line, comment/title lines, blank lines,
+         provenance headers, energy lines, etc.) is skipped. Extra columns after
+         x, y, z (charge, force, ...) are ignored.
+    [KR] .xyz 파일에서 원자 이름과 (x, y, z) 좌표를 불러옵니다.
+         헤더 줄은 몇 줄이든, 어떤 형식이든 자동으로 견고하게 건너뜁니다.
+         다음을 모두 만족할 때만 원자 줄로 인식합니다:
+             (1) 토큰 4개 이상, (2) 첫 토큰이 허용된 화학종 기호,
+             (3) 다음 3개 토큰이 실수(x, y, z).
+
+         허용 화학종 (valid_symbols) — 필수:
+           원자 form-factor 테이블의 원소/이온 목록(예:
+           load_atom_names(aff_element_file) 결과)을 넘겨야 합니다. 이 목록이
+           원자 기준이 되며, 테이블에 있는 이온('Fe2+', 'O2-', 'Cl1-' 등)도
+           인식되어 올바른 form factor에 매칭됩니다. 매칭은 먼저 토큰 원문,
+           다음으로 대소문자 보정된 원소부(예: 'FE' -> 'Fe')를 시도합니다.
+
+         그 외(개수 줄, 주석/제목, 빈 줄, 헤더, 에너지 줄 등)는 건너뜁니다.
+         x, y, z 뒤 추가 컬럼(전하, 힘 등)은 무시합니다.
+
+    Args:
+        file_path (str): [EN] Path to the .xyz file / [KR] .xyz 파일 경로
+        valid_symbols (iterable of str): [EN] Accepted species symbols
+            (element/ion list from the form-factor table). REQUIRED.
+            [KR] 허용 화학종 기호(form-factor 테이블의 원소/이온 목록). 필수.
+
+    Returns:
+        atom_names (list[str])        : [EN] Species symbols / [KR] 화학종 기호 리스트
+        atom_positions (numpy.ndarray): [EN] (N, 3) float array / [KR] (N, 3) 실수 배열
     """
     with open(file_path, 'r') as f:
         lines = f.readlines()
+
+    # [EN] Accepted-symbol set from the form-factor table (may contain ions).
+    # [KR] form-factor 테이블의 허용 기호 집합 (이온 포함 가능).
+    symbol_set = set(valid_symbols)
+
+    def normalize_symbol(tok):
+        # [EN] Canonical accepted symbol for tok, or None.
+        #      1) exact match (keeps ions as in the table, e.g. 'Fe2+')
+        #      2) case-normalised element part (e.g. 'FE'->'Fe')
+        # [KR] tok의 표준 허용 기호(없으면 None).
+        #      1) 정확 일치(이온을 테이블 그대로), 2) 대소문자 보정 원소부
+        if tok in symbol_set:
+            return tok
+        cap = tok[:1].upper() + tok[1:].lower()
+        if cap in symbol_set:
+            return cap
+        return None
+
     atom_names = []
     atom_positions = []
     for line in lines:
         parts = line.split()
-        atom_names.append(parts[0])
-        atom_positions.append([float(x) for x in parts[1:]])
-    atom_positions = np.array(atom_positions)
+
+        # [EN] (1) Need species symbol + at least 3 coordinates.
+        # [KR] (1) 화학종 기호 + 좌표 3개 이상 필요.
+        if len(parts) < 4:
+            continue
+
+        # [EN] (2) First token must be an accepted species symbol.
+        # [KR] (2) 첫 토큰은 허용된 화학종 기호여야 함.
+        symbol = normalize_symbol(parts[0])
+        if symbol is None:
+            continue
+
+        # [EN] (3) Next three tokens must parse as floats.
+        # [KR] (3) 다음 3개 토큰은 실수로 파싱되어야 함.
+        try:
+            xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+        except ValueError:
+            continue
+
+        atom_names.append(symbol)
+        atom_positions.append(xyz)
+
+    if not atom_positions:
+        raise ValueError(
+            "No atom coordinates found in '{0}'. Expected lines of the form "
+            "'Element x y z' (e.g. 'C 1.23 4.56 7.89'), where the symbol is in "
+            "your form-factor table (valid_symbols).".format(file_path)
+        )
+
+    atom_positions = np.array(atom_positions, dtype=float)
     return atom_names, atom_positions
 
 

@@ -40,31 +40,54 @@ alpha = 3  #2 or 3 can be used.
 #        (2) compact string : "C30H24N6Ru1"  or  "C30H24N6Ru"
 #        (3) spaced string  : "C 30 H 24 N 6 Ru 1"
 #        (4) count-1 omitted: "SiO2"   (== {'Si': 1, 'O': 2})
-#      For a FRACTIONAL composition (e.g. "Li0.2Co0.36Mn0.37Ni0.07"),
-#      convert_atom_names cannot expand it into whole atoms — use
-#      composition_weights instead (see demo_experimental_data_testingcode).
+#        (5) fractions      : "Li0.2Co0.36Mn0.37Ni0.07" or {'C':0.3,'H':0.24,...}
+#      Fractional compositions are handled AUTOMATICALLY below (scaled to the
+#      smallest whole numbers for the Compton atom list; result is identical).
 # [KR] 샘플의 화학 조성 — EZPDF_GUI_3 호환. 지원 형식:
 #        (1) 딕셔너리     : {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}
 #        (2) 붙여쓴 문자열 : "C30H24N6Ru1"  또는  "C30H24N6Ru"
 #        (3) 공백 문자열   : "C 30 H 24 N 6 Ru 1"
 #        (4) 개수 1 생략   : "SiO2"   (== {'Si': 1, 'O': 2})
-#      소수 조성(예: "Li0.2Co0.36Mn0.37Ni0.07")은 convert_atom_names로 정수
-#      원자 확장이 불가하므로 composition_weights 사용
-#      (demo_experimental_data_testingcode 참고).
+#        (5) 소수 조성     : "Li0.2Co0.36Mn0.37Ni0.07" 또는 {'C':0.3,'H':0.24,...}
+#      소수 조성은 아래에서 자동으로 처리됩니다 (Compton 원자 리스트를 위해
+#      최소 정수배로 스케일; 결과는 동일).
 # ----------------------------------------------------------------------------------
 # composition = {'Co':2, 'O':2, 'P':1}
-composition = {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}  # [EN] dict form / [KR] 딕셔너리 형식
+# composition = {'C': 30, 'H': 24, 'N': 6, 'Ru': 1}  # [EN] dict form / [KR] 딕셔너리 형식
+#composition = "Li0.2Co0.36Mn0.37Ni0.07"
+# composition = {'C':0.3, 'H': 0.24, 'N':0.06, 'Ru': 0.01}
 # composition = "C30H24N6Ru1"                       # [EN] String form (same result) / [KR] 문자열 (동일 결과)
 # composition = "C 30 H 24 N 6 Ru 1"                # [EN] Spaced string / [KR] 공백 구분 문자열
+# composition = {'C': 0.30, 'H': 0.24, 'N': 0.06, 'Ru': 0.01}  # [EN] Fractional dict (auto-handled) / [KR] 소수 딕셔너리 (자동 처리)
+composition = "Li0.2Co0.36Mn0.37Ni0.07"          # [EN] Fractional string (auto-handled) / [KR] 소수 문자열 (자동 처리)
 # [Type: float] Q range settings (Q 최소값, 최대값, 간격)
 qmin = 0
 qmax = 30
 qstep = 0.01
 
-# [EN] Expand composition dictionary into a full list of atom names
-# [KR] 조성 딕셔너리를 전체 원자 이름 리스트로 변환 (예: ['Co', 'Co', 'O', 'O', 'P'])
-# [Type: list of str]
-atom_names = losa.convert_atom_names(composition)
+# [EN] Parse the composition and detect integer vs fractional.
+#      - Integer  → build a per-atom name list (atom_indices path).
+#      - Fractional → keep the exact fractions as per-element weights and pass
+#        weights= to compton_cal_exp (Li0.2Co0.36... used directly, NOT scaled).
+#      Both give identical Compton intensity.
+# [KR] 조성을 파싱하고 정수/소수를 감지합니다.
+#      - 정수  → 원자별 이름 리스트 생성 (atom_indices 경로).
+#      - 소수  → 소수를 원소별 weight로 그대로 유지하고 compton_cal_exp에
+#        weights=로 전달 (Li0.2Co0.36... 그대로 사용, 정수배 변환 안 함).
+#      두 방식 모두 동일한 Compton 강도를 줍니다.
+comp_parsed = losa.parse_composition(composition)   # dict (values may be float)
+is_fractional = any(not float(v).is_integer() for v in comp_parsed.values())
+
+if is_fractional:
+    # [EN] Fractional: unique element names + exact fractional weights.
+    # [KR] 소수: 고유 원소 이름 + 정확한 소수 weight.
+    atom_unique_names, comp_weights = losa.composition_weights(comp_parsed)
+    atom_names = None      # [EN] not needed on the fractional path / [KR] 소수 경로에선 불필요
+else:
+    # [EN] Integer: expand to a per-atom name list, then group.
+    # [KR] 정수: 원자별 이름 리스트로 확장 후 그룹화.
+    atom_names = losa.convert_atom_names(comp_parsed)
+    comp_weights = None
 
 # -----------------------------------------------------------------------------
 # Database Loading
@@ -76,12 +99,20 @@ atom_names = losa.convert_atom_names(composition)
 compton_atom_names = losa.load_atom_names(compton_aff_element_file)
 compton_scat_parms = losa.load_scattering_factors(compton_aff_parm_file)
 
-# [EN] Group atoms to find unique elements and their counts
-# [KR] 입력된 샘플의 원자들을 종류별로 그룹화하고 개수를 셉니다.
+# [EN] Group atoms to find unique elements and their counts (integer path only).
+#      For the fractional path, atom_unique_names is already set above.
+# [KR] 원자를 종류별로 그룹화하여 고유 원소와 개수를 찾습니다 (정수 경로).
+#      소수 경로에서는 atom_unique_names가 위에서 이미 설정되었습니다.
 # atom_unique_names: [Type: list] Unique elements (e.g., ['Co', 'O', 'P'])
 # atom_counts: [Type: numpy.ndarray] Counts per element (e.g., [2, 2, 1])
 # atom_indices: [Type: numpy.ndarray] Mapping indices (인덱스 매핑)
-atom_unique_names, atom_counts, atom_indices = losa.group_atoms(atom_names)
+if is_fractional:
+    # [EN] atom_unique_names already from composition_weights; no atom_indices.
+    # [KR] atom_unique_names는 composition_weights에서 이미 얻음; atom_indices 없음.
+    atom_counts = None
+    atom_indices = None
+else:
+    atom_unique_names, atom_counts, atom_indices = losa.group_atoms(atom_names)
 
 # print('atom_unique_names = ',atom_unique_names)
 # print('atom_counts = ',atom_counts)
@@ -101,12 +132,26 @@ compton_scat_form_factor, atomic_number = losa.get_compton_scattering_factors(at
 # -----------------------------------------------------------------------------
 # Calculation
 # -----------------------------------------------------------------------------
-# [EN] Calculate the Compton scattering intensity
+# [EN] Calculate the Compton scattering intensity.
+#      Fractional composition → pass weights= (exact fractions used directly).
+#      Integer composition    → pass atom_indices (the usual per-atom path).
+#      Both give identical Compton intensity.
 # [KR] 콤프턴 산란 강도를 계산합니다.
+#      소수 조성 → weights= 전달 (소수를 그대로 사용).
+#      정수 조성 → atom_indices 전달 (기존 원자별 경로).
+#      두 방식 모두 동일한 Compton 강도를 줍니다.
 # list_q: [Type: numpy.ndarray] Q values (X-axis)
 # list_compton_scat: [Type: list or numpy.ndarray] Compton intensity (Y-axis)
-list_q, list_compton_scat = proc.compton_cal_exp(atom_indices, compton_scat_parms, compton_scat_form_factor,
-                            atomic_number, qmin=qmin, qmax=qmax, qstep=qstep, wavelength=wavelength, alpha=alpha)    #proc.compton_calc_exp(XXXX)
+if is_fractional:
+    list_q, list_compton_scat = proc.compton_cal_exp(
+        None, compton_scat_parms, compton_scat_form_factor,
+        atomic_number, qmin=qmin, qmax=qmax, qstep=qstep,
+        wavelength=wavelength, alpha=alpha, weights=comp_weights)
+else:
+    list_q, list_compton_scat = proc.compton_cal_exp(
+        atom_indices, compton_scat_parms, compton_scat_form_factor,
+        atomic_number, qmin=qmin, qmax=qmax, qstep=qstep,
+        wavelength=wavelength, alpha=alpha)    #proc.compton_calc_exp(XXXX)
 
 # [EN] Save the result to a text file
 # [KR] 계산 결과를 텍스트 파일로 저장합니다. (컬럼 1: Q, 컬럼 2: Intensity)
