@@ -66,6 +66,35 @@ def parse_composition(composition):
             element += compact[i]
             i += 1
 
+        # [EN] ION DETECTION: after the element symbol, look ahead for an ion
+        #      pattern "digits + sign" (e.g. 'Fe2+', 'O2-', 'Cl1-'). We reconstruct
+        #      the FULL ion species name so the message names the actual ion, not a
+        #      bare '+'/'-'. This must run BEFORE reading the amount, otherwise the
+        #      leading digits of 'Fe2+' would be consumed as the amount.
+        #      Ions store neutral element amounts only and the Compton table is
+        #      neutral-only, so an ion in the composition is rejected here.
+        # [KR] 이온 감지: 원소 기호 뒤에 "숫자+부호" 패턴('Fe2+', 'O2-', 'Cl1-' 등)
+        #      이 오는지 미리 확인합니다. 이온 화학종 전체 이름을 재구성해 실제
+        #      이온명을 알려줍니다(맨 '+'/'-'가 아니라). 이 검사는 개수 읽기보다
+        #      먼저 실행해야 하며, 그렇지 않으면 'Fe2+'의 앞 숫자가 개수로
+        #      소비됩니다. 조성/ Compton은 중성만 지원하므로 이온은 거부합니다.
+        j = i
+        ion_digits = ""
+        while j < length and compact[j].isdigit():
+            ion_digits += compact[j]
+            j += 1
+        if j < length and (compact[j] == '+' or compact[j] == '-'):
+            # [EN] It's an ion: build the full species name (element + digits + sign).
+            # [KR] 이온이다: 전체 화학종 이름 구성 (원소 + 숫자 + 부호).
+            ion_species = element + ion_digits + compact[j]
+            raise ValueError(
+                "Composition contains an ion: '{0}' (in \"{1}\"). Ionic species such "
+                "as 'Fe2+' or 'O2-' cannot be used in the composition field — use "
+                "the neutral element instead (e.g. '{2}' not '{0}'). Ions are only "
+                "supported in the .xyz structure file, not in the "
+                "composition.".format(ion_species, composition, element)
+            )
+
         # [EN] Read quantity: digits with at most one decimal point, or nothing (=1).
         # [KR] 개수 읽기: 소수점 최대 1개 포함 숫자, 없으면 1
         digits = ""
@@ -252,6 +281,32 @@ def load_atom_name_positions(file_path, valid_symbols):
         )
 
     atom_positions = np.array(atom_positions, dtype=float)
+
+    # ------------------------------------------------------------------
+    # [EN] Report what was actually read from the file. The total is the number
+    #      of valid atom/ion lines found — the header atom-count (if any) is NEVER
+    #      trusted, so a missing or wrong count line does not affect the result.
+    #      If any species is an ion (contains '+' or '-'), say so explicitly.
+    # [KR] 파일에서 실제로 읽은 내용을 알립니다. 총 개수는 발견된 유효한 원자/이온
+    #      줄의 수이며, 헤더의 원자 개수(있더라도)는 절대 신뢰하지 않으므로 개수
+    #      줄이 없거나 잘못되어도 결과에 영향이 없습니다. 이온(+/- 포함)이 있으면
+    #      명시적으로 알립니다.
+    # ------------------------------------------------------------------
+    total = len(atom_names)
+    ion_names = [s for s in atom_names if ('+' in s) or ('-' in s)]
+    neutral_count = total - len(ion_names)
+
+    fname = file_path.replace('\\', '/').split('/')[-1]
+    if ion_names:
+        unique_ions = sorted(set(ion_names))
+        print("[load_atom_name_positions] '{0}': {1} atoms read "
+              "({2} neutral, {3} ion) — IONS DETECTED: {4}".format(
+                  fname, total, neutral_count, len(ion_names),
+                  ", ".join(unique_ions)))
+    else:
+        print("[load_atom_name_positions] '{0}': {1} atoms read "
+              "(all neutral, no ions).".format(fname, total))
+
     return atom_names, atom_positions
 
 

@@ -1,5 +1,6 @@
 # ui/control_panel.py
 import os
+import re
 import numpy as np
 
 # [중요] Qt 모듈 임포트
@@ -52,7 +53,13 @@ class ControlPanel(QWidget):
         tabs.addTab(self.basic_controls(), "Basic")
         tabs.addTab(self.pdf_controls(), "PDF")
         tabs.addTab(self.cal_controls(), "CAL")
-        tabs.addTab(self.compton_controls(), "Compton")
+        self.compton_tab_widget = self.compton_controls()
+        tabs.addTab(self.compton_tab_widget, "Compton")
+
+        # Warn about ionic species when the Compton tab is opened, since Compton
+        # scattering is defined for neutral atoms only.
+        self.control_tabs = tabs
+        tabs.currentChanged.connect(self._on_control_tab_changed)
 
         layout.addWidget(tabs)
 
@@ -684,6 +691,18 @@ class ControlPanel(QWidget):
                 # composition. Returns False if the user cancels.
                 if not self._resolve_compton_composition_source():
                     return
+                # Compton scattering is defined for neutral atoms only.
+                ions = self._find_ion_symbols(self.compton_composition_input.text())
+                if ions:
+                    shown = ", ".join(ions[:8]) + (" ..." if len(ions) > 8 else "")
+                    QMessageBox.warning(
+                        self,
+                        "Ions in composition",
+                        "The composition contains ions ({0}).\n\n"
+                        "Compton scattering cannot use ions \u2014 please enter "
+                        "neutral element symbols only (e.g. 'Fe' not 'Fe2+', "
+                        "'O' not 'O2-').".format(shown))
+                    return
                 calculate_compton(self)
             except Exception as e:
                 QMessageBox.critical(
@@ -746,9 +765,62 @@ class ControlPanel(QWidget):
                                         self.composition_example_label)
 
     def _update_compton_composition_preview(self, text=None):
-        """Preview for the Compton-tab composition field."""
+        """Preview for the Compton-tab composition field.
+
+        If the composition contains ions, show a Compton-specific message
+        (ions aren't allowed) instead of the generic 'cannot read' parse error,
+        since Compton scattering is defined for neutral atoms only.
+        """
+        ions = self._find_ion_symbols(self.compton_composition_input.text())
+        if ions:
+            shown = ", ".join(ions[:5]) + (" ..." if len(ions) > 5 else "")
+            label = self.compton_composition_example_label
+            label.setText("\u26a0 Compton cannot use ions \u2014 use neutral atoms "
+                          "only (e.g. 'Fe' not 'Fe2+'). Found: " + shown)
+            label.setStyleSheet("color: #c0392b; font-weight: normal;")
+            return
         self._apply_composition_preview(self.compton_composition_input,
                                         self.compton_composition_example_label)
+
+    @staticmethod
+    def _find_ion_symbols(text):
+        """Return the ionic species (e.g. 'Fe2+', 'O2-') found in a composition
+        string. Neutral compositions contain no charge signs, so this is empty
+        for them."""
+        if not text:
+            return []
+        # Element symbol + optional oxidation number + charge sign.
+        ions = re.findall(r'[A-Z][a-z]?\d*[+-]', text)
+        # De-duplicate while preserving order.
+        seen = set()
+        unique = []
+        for ion in ions:
+            if ion not in seen:
+                seen.add(ion)
+                unique.append(ion)
+        return unique
+
+    def _on_control_tab_changed(self, index):
+        """When the Compton tab is opened, warn if the composition has ions."""
+        if getattr(self, "control_tabs", None) is None:
+            return
+        if self.control_tabs.widget(index) is getattr(self, "compton_tab_widget", None):
+            self._warn_if_compton_composition_has_ions()
+
+    def _warn_if_compton_composition_has_ions(self):
+        """Show a warning if the Compton composition contains ionic species.
+        Compton scattering is defined for neutral atoms only."""
+        ions = self._find_ion_symbols(self.compton_composition_input.text())
+        if not ions:
+            return
+        QMessageBox.warning(
+            self,
+            "Ions in composition",
+            "The composition contains ionic species: {0}.\n\n"
+            "Compton scattering is defined for neutral atoms only, so ions "
+            "cannot be used here. Please enter neutral element symbols "
+            "(e.g. 'Fe' instead of 'Fe2+', 'O' instead of 'O2-') for the "
+            "Compton calculation.".format(", ".join(ions)))
 
     def _selected_xyz_path(self):
         """Return the path of the single selected .xyz file, or None.

@@ -109,6 +109,32 @@ def load_atom_name_positions(file_path, valid_symbols):
         )
 
     atom_positions = np.array(atom_positions, dtype=float)
+
+    # ------------------------------------------------------------------
+    # [EN] Report what was actually read from the file. The total is the number
+    #      of valid atom/ion lines found — the header atom-count (if any) is NEVER
+    #      trusted, so a missing or wrong count line does not affect the result.
+    #      If any species is an ion (contains '+' or '-'), say so explicitly.
+    # [KR] 파일에서 실제로 읽은 내용을 알립니다. 총 개수는 발견된 유효한 원자/이온
+    #      줄의 수이며, 헤더의 원자 개수(있더라도)는 절대 신뢰하지 않으므로 개수
+    #      줄이 없거나 잘못되어도 결과에 영향이 없습니다. 이온(+/- 포함)이 있으면
+    #      명시적으로 알립니다.
+    # ------------------------------------------------------------------
+    total = len(atom_names)
+    ion_names = [s for s in atom_names if ('+' in s) or ('-' in s)]
+    neutral_count = total - len(ion_names)
+
+    fname = file_path.replace('\\', '/').split('/')[-1]
+    if ion_names:
+        unique_ions = sorted(set(ion_names))
+        print("[load_atom_name_positions] '{0}': {1} atoms read "
+              "({2} neutral, {3} ion) — IONS DETECTED: {4}".format(
+                  fname, total, neutral_count, len(ion_names),
+                  ", ".join(unique_ions)))
+    else:
+        print("[load_atom_name_positions] '{0}': {1} atoms read "
+              "(all neutral, no ions).".format(fname, total))
+
     return atom_names, atom_positions
 
 
@@ -192,6 +218,28 @@ def parse_composition(composition):
         if i < length and compact[i].islower():
             element += compact[i]
             i += 1
+
+        # [EN] ION DETECTION: look ahead for "digits + sign" (e.g. 'Fe2+', 'O2-').
+        #      Reconstruct the full ion name so the message names the actual ion.
+        #      Runs BEFORE reading the amount. Ions are neutral-only for Compton,
+        #      so an ion in the composition is rejected.
+        # [KR] 이온 감지: "숫자+부호"('Fe2+','O2-' 등)를 미리 확인. 이온 전체 이름을
+        #      재구성해 실제 이온명을 알림. 개수 읽기보다 먼저 실행. 조성/Compton은
+        #      중성만 지원하므로 이온은 거부.
+        j = i
+        ion_digits = ""
+        while j < length and compact[j].isdigit():
+            ion_digits += compact[j]
+            j += 1
+        if j < length and (compact[j] == '+' or compact[j] == '-'):
+            ion_species = element + ion_digits + compact[j]
+            raise ValueError(
+                "Composition contains an ion: '{0}' (in \"{1}\"). Ionic species such "
+                "as 'Fe2+' or 'O2-' cannot be used in the composition field — use "
+                "the neutral element instead (e.g. '{2}' not '{0}'). Ions are only "
+                "supported in the .xyz structure file, not in the "
+                "composition.".format(ion_species, composition, element)
+            )
 
         # [EN] Quantity: digits + at most one dot, or nothing (=1)
         # [KR] 개수: 숫자 + 소수점 최대 1개, 없으면 1

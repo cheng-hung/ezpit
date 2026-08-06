@@ -190,8 +190,10 @@ def cal_Iq(atom_indices, scattering_factors, atom_distance_matrix,
     num_atom = len(atom_indices)
     num_fact = len(scattering_factors)
     diag_idx = np.diag_indices(num_atom)
-    distance_matrix_non_zero = np.copy(atom_distance_matrix)
-    distance_matrix_non_zero[diag_idx] = 1.0
+    # sin(q*r)/(q*r) -> 1 as r -> 0. Zero distances occur on the diagonal
+    # (self-pairs) and for any coincident atoms sharing identical coordinates;
+    # both are set to 1 below so the 0/0 division never produces NaN/warnings.
+    zero_mask = (atom_distance_matrix == 0.0)
     list_Iq = []
     q_range = np.arange(qmin, qmax, qstep)
     for q in q_range:
@@ -206,9 +208,11 @@ def cal_Iq(atom_indices, scattering_factors, atom_distance_matrix,
         if q == 0:
             sin_mat = np.ones(np.shape(atom_distance_matrix))
         else:
-            sin_mat = np.sin(q * atom_distance_matrix) / (
-                    q * distance_matrix_non_zero)
-        sin_mat[diag_idx] = 1.0
+            qr = q * atom_distance_matrix
+            sin_mat = np.divide(np.sin(qr), qr,
+                                out=np.ones_like(atom_distance_matrix, dtype=float),
+                                where=~zero_mask)
+        sin_mat[zero_mask] = 1.0
         Iq = fi_mat * np.transpose(fi_mat) * sin_mat
         list_Iq.append(np.sum(Iq))
     return q_range, list_Iq
@@ -220,8 +224,12 @@ def cal_Sq(atom_indices, scattering_factors, atom_distance_matrix,
     num_atom = len(atom_indices)
     num_fact = len(scattering_factors)
     diag_idx = np.diag_indices(num_atom)
-    distance_matrix_non_zero = np.copy(atom_distance_matrix)
-    distance_matrix_non_zero[diag_idx] = 1.0
+    # sin(q*r)/(q*r) -> 1 as r -> 0. Zero distances occur on the diagonal
+    # (self-pairs) AND for any coincident atoms sharing identical coordinates.
+    # Both must be set to this limit; otherwise the 0/0 division yields NaN
+    # (with an "invalid value encountered in divide" warning) that propagates
+    # into I(q)/S(q)/F(q)/G(r).
+    zero_mask = (atom_distance_matrix == 0.0)
 
     list_Iq = []
     sq_mean_fi = []
@@ -243,9 +251,11 @@ def cal_Sq(atom_indices, scattering_factors, atom_distance_matrix,
         if q == 0:
             sin_mat = np.ones(np.shape(atom_distance_matrix))
         else:
-            sin_mat = np.sin(q * atom_distance_matrix) / (
-                    q * distance_matrix_non_zero)
-        sin_mat[diag_idx] = 1.0
+            qr = q * atom_distance_matrix
+            sin_mat = np.divide(np.sin(qr), qr,
+                                out=np.ones_like(atom_distance_matrix, dtype=float),
+                                where=~zero_mask)
+        sin_mat[zero_mask] = 1.0
         Iq = fi_mat * np.transpose(fi_mat) * sin_mat
         list_Iq.append(np.sum(Iq))
         sq_mean_fi.append((fi_sum / num_atom) ** 2)

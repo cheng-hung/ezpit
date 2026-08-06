@@ -59,7 +59,7 @@ alpha = 3  #2 or 3 can be used.
 # composition = "C30H24N6Ru1"                       # [EN] String form (same result) / [KR] 문자열 (동일 결과)
 # composition = "C 30 H 24 N 6 Ru 1"                # [EN] Spaced string / [KR] 공백 구분 문자열
 # composition = {'C': 0.30, 'H': 0.24, 'N': 0.06, 'Ru': 0.01}  # [EN] Fractional dict (auto-handled) / [KR] 소수 딕셔너리 (자동 처리)
-composition = "Li0.2Co0.36Mn0.37Ni0.07"          # [EN] Fractional string (auto-handled) / [KR] 소수 문자열 (자동 처리)
+composition = "Li0.2Co0.36Mn0.37Ni0.07Fe2+0.1"          # [EN] Fractional string (auto-handled) / [KR] 소수 문자열 (자동 처리)
 # [Type: float] Q range settings (Q 최소값, 최대값, 간격)
 qmin = 0
 qmax = 30
