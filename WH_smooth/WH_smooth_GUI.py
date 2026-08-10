@@ -1,5 +1,5 @@
 """
-wh_range_smoother.py
+wh_range_smoother.py v1.0.1 (07/30/2026)
 ────────────────────
 Standalone GUI — Whittaker-Henderson smoothing over selected q ranges.
 
@@ -13,6 +13,16 @@ Workflow:
   5. Apply → inspect Original vs Smoothed + Difference plots
   6. Save result
 
+Plot navigation (both the main and difference plots):
+  * Left-drag       : draw a rectangle to zoom into that region (box-zoom).
+  * Double-click    : reset the view to full auto-range (zoom out).
+  * Right-drag      : pyqtgraph's built-in continuous zoom.
+  * Z key           : toggle the left-drag behaviour between Box-Zoom and Pan.
+  * R key           : auto-range (reset zoom), same as double-click.
+  Note: while a "Manual Spline" range is in point-editing mode, the main plot
+  temporarily switches to Pan mode so left-clicks add anchor points instead of
+  drawing a zoom box; box-zoom is restored automatically when editing ends.
+
 Requirements: PySide6, numpy, scipy, pyqtgraph
 Usage       : python wh_range_smoother.py
 
@@ -20,12 +30,12 @@ Author      : Gihan Kwon
 Affiliation : National Synchrotron Light Source II (NSLS-II),
               Brookhaven National Laboratory, Upton, NY, USA
 Contact     : gkwon@bnl.gov
-Version     : 1.0.0
+Version     : 1.0.1
 License     : (add your license here)
 """
 
 __author__ = "Gihan Kwon"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import sys
 import os
@@ -257,22 +267,66 @@ def range_smooth(q: np.ndarray,
 # ══════════════════════════════════════════════════════════════
 
 def load_file(path: str):
-    """Load a two-column data file, skipping header lines."""
-    skip = 0
-    with open(path, 'r') as f:
-        for i, line in enumerate(f):
-            parts = line.strip().split()
-            if len(parts) >= 2:
-                try:
-                    float(parts[0]); float(parts[1])
-                    skip = i
-                    break
-                except ValueError:
-                    continue
-    data = np.loadtxt(path, skiprows=skip)
-    if data.ndim == 1 or data.shape[1] < 2:
-        raise ValueError("File must have at least two numeric columns.")
-    return data[:, 0], data[:, 1]
+    """Load a two-column data file, automatically skipping any header.
+
+    Handles the file variety produced by common reduction tools:
+      * plain two-column data with no header (.dat / .xy / .txt)
+      * pyFAI / Fit2d style headers with '#' comment lines (.xy)
+      * headers prefixed with '#', '!', ';', '%', '*', '//' or 'x'/'q' titles
+      * Windows (CRLF) or Unix line endings
+      * non-UTF-8 bytes in the header (e.g. the 'µ' in 'µm'), which would
+        otherwise crash a strict UTF-8 read
+      * whitespace-, tab-, comma- or semicolon-separated columns (.csv/.tsv)
+      * stray NaN / inf rows, which are skipped
+
+    Only the first two numeric columns are used; any extra columns
+    (uncertainties, etc.) are ignored. Every line is tried as data, so header
+    rows are skipped automatically no matter how many there are.
+
+    Returns
+    -------
+    (x, y) : tuple of numpy.ndarray
+        The first two numeric columns of the file.
+    """
+    # Read as latin-1 so any byte decodes without error; we only need the
+    # numbers, and latin-1 maps every byte 1:1.
+    with open(path, 'r', encoding='latin-1') as f:
+        lines = f.readlines()
+
+    x_vals = []
+    y_vals = []
+    for line in lines:
+        s = line.strip()
+        if not s:
+            continue
+        # Skip obvious comment / header lines (common comment markers).
+        if s[0] in ('#', '!', ';', '%', '*', '@') or s.startswith('//'):
+            continue
+        # Normalise separators: treat commas, semicolons and tabs like spaces
+        # so whitespace-, comma-, semicolon- and tab-separated files all work.
+        parts = s.replace(',', ' ').replace(';', ' ').replace('\t', ' ').split()
+        if len(parts) < 2:
+            continue
+        try:
+            a = float(parts[0])
+            b = float(parts[1])
+        except ValueError:
+            # Any remaining header text (e.g. column titles like "q  I") is
+            # skipped automatically because it fails to parse as a number.
+            continue
+        # Drop non-finite rows so they cannot corrupt later math / plotting.
+        if not (np.isfinite(a) and np.isfinite(b)):
+            continue
+        x_vals.append(a)
+        y_vals.append(b)
+
+    if len(x_vals) < 2:
+        raise ValueError(
+            "No two-column numeric data found in the file. "
+            "Expected two columns (x and intensity)."
+        )
+
+    return np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -471,7 +525,10 @@ class WHRangeSmoother(QMainWindow):
         if os.path.exists(_icon_path):
             self.setWindowIcon(QIcon(_icon_path))
 
-        self.resize(1200, 760)
+        # Size the window to fit the available screen area (which excludes the
+        # taskbar) and centre it, so the bottom buttons are never cut off on
+        # smaller or scaled displays.
+        self._fit_and_center(1200, 760)
 
         self._settings = QSettings("EZPDF", "WHRangeSmoother")
         self._last_dir = self._settings.value("last_dir", "")
@@ -491,6 +548,40 @@ class WHRangeSmoother(QMainWindow):
 
         self._build_ui()
         self._init_help_menu()
+
+    # ── Window placement ──────────────────────────────────────
+
+    def _fit_and_center(self, width: int, height: int):
+        """Resize to at most the available screen area, then centre the window.
+
+        `availableGeometry()` excludes the taskbar, so the window never extends
+        underneath it and the buttons at the bottom stay reachable. On smaller
+        or display-scaled screens the window shrinks to fit instead of being
+        clipped.
+        """
+        try:
+            screen = self.screen() or QApplication.primaryScreen()
+            avail = screen.availableGeometry()
+
+            # Leave a margin so the window does not touch the edges. The
+            # vertical margin is larger because window title bars and some
+            # display-scaling setups eat extra height, which otherwise pushes
+            # the bottom buttons under the taskbar.
+            max_w = max(800, avail.width() - 40)
+            max_h = max(600, avail.height() - 80)
+
+            w = min(width, max_w)
+            h = min(height, max_h)
+            self.resize(w, h)
+
+            # Centre within the available area.
+            x = avail.x() + (avail.width() - w) // 2
+            y = avail.y() + (avail.height() - h) // 2
+            self.move(x, y)
+        except Exception:
+            # If anything about the screen query fails, fall back to a plain
+            # resize rather than leaving the window unsized.
+            self.resize(width, height)
 
     # ── Help menu / About ─────────────────────────────────────
 
@@ -551,7 +642,18 @@ class WHRangeSmoother(QMainWindow):
         left.setFixedWidth(420)
         llay = QVBoxLayout(left)
         llay.setSpacing(10)
-        splitter.addWidget(left)
+
+        # Wrap the control panel in a scroll area. On short or display-scaled
+        # screens the panel can be taller than the window; the scroll area keeps
+        # every control (including the bottom buttons) reachable instead of
+        # letting them fall off the bottom edge.
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setWidget(left)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setFixedWidth(440)   # panel width + room for scrollbar
+        splitter.addWidget(left_scroll)
 
         # 1. File
         file_grp = QGroupBox("1.  Load File")
@@ -710,6 +812,7 @@ class WHRangeSmoother(QMainWindow):
         self.plot_main.setLabel('left',   "Intensity")
         # Legend created/re-created in _update_main_plot after each clear()
         self._legend = None
+        self._legend_pos = None   # remembers where the user dragged the legend
         self.plot_main.showGrid(x=True, y=True, alpha=0.3)
 
         # In-plot coordinate label (top-right, always in view)
@@ -759,13 +862,37 @@ class WHRangeSmoother(QMainWindow):
             lambda pos: self._on_mouse_move(pos, 'diff'))
         rlay.addWidget(self.plot_diff, 1)
 
-        # Install Z / R key shortcuts on both plot widgets
+        # Install Z / R key shortcuts on both plot widgets, enable box-zoom
+        # by default, and wire up double-click to reset the view.
         for pw, name in ((self.plot_main, "main"),
                          (self.plot_diff, "diff")):
             pw.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             pw.keyPressEvent = lambda e, p=pw, n=name: self._plot_key(e, p, n)
+            vb = pw.getViewBox()
+            # Left-drag draws a zoom box and zooms into it (box-zoom is the
+            # default interaction). Manual-Spline editing temporarily switches
+            # the main plot back to Pan mode so left-clicks add points instead.
+            vb.setMouseMode(pg.ViewBox.RectMode)
+            # Double-click anywhere in the plot resets to full auto-range
+            # (a quick "zoom out" back to the whole dataset).
+            vb.mouseDoubleClickEvent = (
+                lambda e, v=vb, n=name: self._on_plot_double_click(e, v, n))
 
-        self.statusBar().showMessage("Ready — load a data file.    |    Z: Box-Zoom    R: Auto-Range")
+        # Permanent mouse-usage hint pinned to the RIGHT of the status bar via
+        # addPermanentWidget(). Permanent widgets are never covered by the
+        # temporary messages set with showMessage() (which occupy the LEFT side),
+        # so the hint stays visible even after a file is loaded.
+        self._mouse_hint = QLabel(
+            "🖱  Drag: Zoom-in   |   Double-click: Reset   |   "
+            "Right-drag: Zoom   |   Z: Pan/Zoom   R: Reset")
+        self._mouse_hint.setStyleSheet(
+            "QLabel { color:#555; padding:0 8px; }")
+        self._mouse_hint.setToolTip(
+            "Left-drag a box to zoom in  •  Double-click to reset (zoom out)  •  "
+            "Right-drag for continuous zoom  •  Z toggles Pan/Zoom  •  R resets")
+        self.statusBar().addPermanentWidget(self._mouse_hint)
+
+        self.statusBar().showMessage("Ready — load a data file.")
         self._add_range_row()
 
     # ── Mouse cursor tracking ──────────────────────────────────
@@ -821,10 +948,16 @@ class WHRangeSmoother(QMainWindow):
     # ── Callbacks ─────────────────────────────────────────────
 
     def _plot_key(self, event, plot_widget, which: str):
-        """
-        Z  — toggle Box-Zoom mode (left mouse drag = zoom box)
-        R  — auto-range (reset zoom)
-        Other keys fall through to pyqtgraph default handler.
+        """Keyboard shortcuts for the plot widgets.
+
+        Z  — toggle the left-mouse-drag behaviour between Box-Zoom (drag a
+             rectangle to zoom into it) and Pan (drag to move the view).
+             Box-Zoom is the default; Manual-Spline editing overrides it while
+             active (see `_on_manual_btn_toggled`).
+        R  — auto-range: reset the zoom so the whole dataset is visible again
+             (equivalent to double-clicking the plot).
+
+        Any other key falls through to pyqtgraph's default handler.
         """
         key = event.key()
         vb  = plot_widget.getViewBox()
@@ -846,6 +979,28 @@ class WHRangeSmoother(QMainWindow):
             # Let pyqtgraph handle all other keys normally
             pg.PlotWidget.keyPressEvent(plot_widget, event)
 
+    def _on_plot_double_click(self, event, vb, which: str):
+        """Reset the view on a left double-click (quick "zoom out").
+
+        A left double-click anywhere in the plot calls `autoRange()`, restoring
+        the full data range after a box-zoom. Non-left double-clicks are passed
+        through to pyqtgraph's default handler so its context behaviour is kept.
+        """
+        try:
+            btn = event.button()
+        except Exception:
+            btn = None
+        # Only the left button resets; let other buttons keep default behaviour.
+        if btn is not None and btn != Qt.MouseButton.LeftButton:
+            pg.ViewBox.mouseDoubleClickEvent(vb, event)
+            return
+        vb.autoRange()
+        self.statusBar().showMessage(f"[{which}] view reset (auto-range)")
+        try:
+            event.accept()
+        except Exception:
+            pass
+
     def _apply_log_scale(self):
         """Toggle log Y-axis on main plot for I(q) mode."""
         is_iq  = (self._data_type == "I(q)")
@@ -863,7 +1018,8 @@ class WHRangeSmoother(QMainWindow):
     def _pick_bkg(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Load Background File", self._last_dir,
-            "Data Files (*.chi *.iq *.txt *.dat);;All Files (*)")
+            "Data Files (*.chi *.iq *.sq *.fq *.xy *.gr *.txt *.dat *.csv *.tsv);;"
+            "All Files (*)")
         if not path:
             return
         self.bkg_edit.setText(path)
@@ -905,7 +1061,8 @@ class WHRangeSmoother(QMainWindow):
         """Load an optional reference curve for visual comparison."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Load Reference File", self._last_dir,
-            "Data Files (*.chi *.iq *.sq *.fq *.txt *.dat);;All Files (*)")
+            "Data Files (*.chi *.iq *.sq *.fq *.xy *.gr *.txt *.dat *.csv *.tsv);;"
+            "All Files (*)")
         if not path:
             return
         try:
@@ -942,7 +1099,7 @@ class WHRangeSmoother(QMainWindow):
     def _pick_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Load Data File", self._last_dir,
-            "Data Files (*.chi *.iq *.sq *.fq *.txt *.dat);;"
+            "Data Files (*.chi *.iq *.sq *.fq *.xy *.gr *.txt *.dat *.csv *.tsv);;"
             "All Files (*)")
         if not path:
             return
@@ -961,10 +1118,27 @@ class WHRangeSmoother(QMainWindow):
         self._settings.setValue("last_dir", self._last_dir)
         self._settings.sync()
 
-        # Auto-detect type from extension
-        ext = os.path.splitext(path)[1].lower()
-        type_map = {'.sq': 'S(q)', '.fq': 'F(q)', '.iq': 'I(q)', '.chi': 'I(q)'}
-        detected = type_map.get(ext, 'F(q)')
+        # Auto-detect the data type, first from the extension and then, for
+        # generic extensions such as .dat/.xy/.txt, from the file name itself
+        # (e.g. "sample_sq.dat" is treated as S(q)). Anything still unknown is
+        # assumed to be raw intensity, I(q).
+        base = os.path.basename(path).lower()
+        stem, ext = os.path.splitext(base)
+
+        type_map = {'.sq': 'S(q)', '.fq': 'F(q)',
+                    '.iq': 'I(q)', '.chi': 'I(q)'}
+
+        if ext in type_map:
+            detected = type_map[ext]
+        else:
+            # Generic extension: look for an s(q)/f(q) hint in the file name.
+            if 'sq' in stem or 's(q)' in stem:
+                detected = 'S(q)'
+            elif 'fq' in stem or 'f(q)' in stem:
+                detected = 'F(q)'
+            else:
+                detected = 'I(q)'
+
         for btn in self._type_bg.buttons():
             btn.setChecked(btn.text() == detected)
 
@@ -1109,15 +1283,21 @@ class WHRangeSmoother(QMainWindow):
         self._range_layout.insertWidget(idx, row)
 
     def _on_manual_btn_toggled(self, row, checked):
+        main_vb = self.plot_main.getViewBox()
         if checked:
             if self._active_row and self._active_row is not row:
                 self._active_row.manual_btn.setChecked(False)
             self._active_row = row
+            # While adding points, left-drag must NOT draw a zoom box — switch
+            # the main plot to Pan mode so left-clicks register as points.
+            main_vb.setMouseMode(pg.ViewBox.PanMode)
             self.statusBar().showMessage(
                 "Manual Spline: LEFT-CLICK on graph to add points  |  RIGHT-CLICK to finish")
         else:
             if self._active_row is row:
                 self._active_row = None
+            # Restore box-zoom as the default left-drag interaction.
+            main_vb.setMouseMode(pg.ViewBox.RectMode)
             self.statusBar().showMessage(
                 f"Manual editing stopped  ({len(row._manual_pts)} pts stored)")
 
@@ -1136,6 +1316,8 @@ class WHRangeSmoother(QMainWindow):
         if btn == _QC.Qt.MouseButton.RightButton:
             self._active_row.manual_btn.setChecked(False)
             self._active_row = None
+            # Restore box-zoom as the default left-drag interaction.
+            self.plot_main.getViewBox().setMouseMode(pg.ViewBox.RectMode)
             self._update_main_plot()
             self.statusBar().showMessage("Manual point editing finished.")
             return
@@ -1186,14 +1368,39 @@ class WHRangeSmoother(QMainWindow):
         return self._data_type
 
     def _update_main_plot(self):
+        # Remember where the legend currently sits (the user may have dragged
+        # it) so the same position can be restored after clear().
+        if self._legend is not None:
+            try:
+                self._legend_pos = self._legend.pos()
+            except Exception:
+                pass
+
         self.plot_main.clear()
         self.plot_main.setLabel('left', self._ylabel())
-        # Re-create legend after clear() (clear() removes it)
-        self._legend = self.plot_main.addLegend(offset=(10, 10))
+        # Re-create legend after clear() (clear() removes it).
+        # It is anchored to the top-right corner by default; the user can drag
+        # it anywhere, and that position is kept across replots.
+        self._legend = self.plot_main.addLegend()
         self._legend.setLabelTextSize('13pt')
         self._legend.setLabelTextColor('k')
         self._legend.setBrush(pg.mkBrush(0, 0, 0, 0))   # transparent background
         self._legend.setPen(pg.mkPen(None))              # no frame
+
+        if self._legend_pos is None:
+            # Default: anchor the legend's top-right corner to the plot's
+            # top-right, inset slightly so it does not touch the axes.
+            try:
+                self._legend.anchor(itemPos=(1, 0), parentPos=(1, 0),
+                                    offset=(-10, 10))
+            except Exception:
+                pass
+        else:
+            # Restore the position the legend had before the replot.
+            try:
+                self._legend.setPos(self._legend_pos)
+            except Exception:
+                pass
         # Re-add crosshairs + coord after clear()
         self.plot_main.addItem(self._vline_main, ignoreBounds=True)
         self.plot_main.addItem(self._hline_main, ignoreBounds=True)
@@ -1321,6 +1528,9 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     win = WHRangeSmoother()
+    # Re-apply the fit/centre now that the application and screen are fully
+    # initialised; at __init__ time the screen may not be known yet.
+    win._fit_and_center(1200, 760)
     win.show()
     sys.exit(app.exec())
 

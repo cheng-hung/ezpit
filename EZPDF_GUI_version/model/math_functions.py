@@ -1,6 +1,7 @@
 # model/math_functions.py
 
 import numpy as np
+import warnings
 from scipy.spatial.distance import cdist
 from scipy import interpolate
 from model.elem_data import ElementData
@@ -10,6 +11,30 @@ from math import factorial
 import io
 
 data = ElementData()
+
+
+# Messages already reported by _warn_once(), so that a warning about the same
+# situation is not repeated on every recalculation (parameter sliders trigger
+# many recalculations in a row).
+_WARNED_MESSAGES = set()
+
+
+def _warn_once(message):
+    """Emit a warning the first time this exact message occurs."""
+    if message in _WARNED_MESSAGES:
+        return
+    _WARNED_MESSAGES.add(message)
+    warnings.warn(message, RuntimeWarning, stacklevel=3)
+    print("[Warning] " + message)
+
+
+def reset_warning_history():
+    """Allow previously reported warnings to be shown again.
+
+    Call this when the user changes files, so a genuinely new situation is
+    reported even if the wording matches an earlier warning.
+    """
+    _WARNED_MESSAGES.clear()
 
 
 def create_atom_distance_matrix(atom_positions):
@@ -165,8 +190,10 @@ def cal_Iq(atom_indices, scattering_factors, atom_distance_matrix,
     num_atom = len(atom_indices)
     num_fact = len(scattering_factors)
     diag_idx = np.diag_indices(num_atom)
-    distance_matrix_non_zero = np.copy(atom_distance_matrix)
-    distance_matrix_non_zero[diag_idx] = 1.0
+    # sin(q*r)/(q*r) -> 1 as r -> 0. Zero distances occur on the diagonal
+    # (self-pairs) and for any coincident atoms sharing identical coordinates;
+    # both are set to 1 below so the 0/0 division never produces NaN/warnings.
+    zero_mask = (atom_distance_matrix == 0.0)
     list_Iq = []
     q_range = np.arange(qmin, qmax, qstep)
     for q in q_range:
@@ -181,9 +208,11 @@ def cal_Iq(atom_indices, scattering_factors, atom_distance_matrix,
         if q == 0:
             sin_mat = np.ones(np.shape(atom_distance_matrix))
         else:
-            sin_mat = np.sin(q * atom_distance_matrix) / (
-                    q * distance_matrix_non_zero)
-        sin_mat[diag_idx] = 1.0
+            qr = q * atom_distance_matrix
+            sin_mat = np.divide(np.sin(qr), qr,
+                                out=np.ones_like(atom_distance_matrix, dtype=float),
+                                where=~zero_mask)
+        sin_mat[zero_mask] = 1.0
         Iq = fi_mat * np.transpose(fi_mat) * sin_mat
         list_Iq.append(np.sum(Iq))
     return q_range, list_Iq
@@ -195,8 +224,12 @@ def cal_Sq(atom_indices, scattering_factors, atom_distance_matrix,
     num_atom = len(atom_indices)
     num_fact = len(scattering_factors)
     diag_idx = np.diag_indices(num_atom)
-    distance_matrix_non_zero = np.copy(atom_distance_matrix)
-    distance_matrix_non_zero[diag_idx] = 1.0
+    # sin(q*r)/(q*r) -> 1 as r -> 0. Zero distances occur on the diagonal
+    # (self-pairs) AND for any coincident atoms sharing identical coordinates.
+    # Both must be set to this limit; otherwise the 0/0 division yields NaN
+    # (with an "invalid value encountered in divide" warning) that propagates
+    # into I(q)/S(q)/F(q)/G(r).
+    zero_mask = (atom_distance_matrix == 0.0)
 
     list_Iq = []
     sq_mean_fi = []
@@ -218,9 +251,11 @@ def cal_Sq(atom_indices, scattering_factors, atom_distance_matrix,
         if q == 0:
             sin_mat = np.ones(np.shape(atom_distance_matrix))
         else:
-            sin_mat = np.sin(q * atom_distance_matrix) / (
-                    q * distance_matrix_non_zero)
-        sin_mat[diag_idx] = 1.0
+            qr = q * atom_distance_matrix
+            sin_mat = np.divide(np.sin(qr), qr,
+                                out=np.ones_like(atom_distance_matrix, dtype=float),
+                                where=~zero_mask)
+        sin_mat[zero_mask] = 1.0
         Iq = fi_mat * np.transpose(fi_mat) * sin_mat
         list_Iq.append(np.sum(Iq))
         sq_mean_fi.append((fi_sum / num_atom) ** 2)
@@ -259,25 +294,115 @@ def cal_expSq(atom_indices, scattering_factors, expqiq, bkgqiq, qmin=0, qmax=25,
     # -------------------------------------------------------------------
     # 2. Background Data 처리
     # -------------------------------------------------------------------
+    # Physically, a background can only be subtracted when it was measured and
+    # integrated with exactly the same settings as the sample, so the sample
+    # and background must share the same q-axis. If the q-axes differ, the
+    # subtraction is meaningless, so we refuse to guess and raise a clear error
+    # instead of silently producing a wrong result.
+    bkg_q = None
     if isinstance(bkgqiq, str):
         data_bkg = load_qiq_file(bkgqiq, min_cols=2, usecols=(0, 1))
+        bkg_q = data_bkg[:, 0]
         bkg_Iq = data_bkg[:, 1]
     elif bkgqiq is not None:
         if hasattr(bkgqiq, 'shape') and len(bkgqiq.shape) > 1:
+            bkg_q = bkgqiq[0]
             bkg_Iq = bkgqiq[1]
         elif isinstance(bkgqiq, (list, tuple)) and len(bkgqiq) == 2 and hasattr(bkgqiq[0], '__len__'):
+            bkg_q = bkgqiq[0]
             bkg_Iq = bkgqiq[1]
         else:
             bkg_Iq = bkgqiq
     else:
         bkg_Iq = np.zeros_like(exp_Iq)
 
+    exp_q = np.asarray(exp_q, dtype=float)
+    exp_Iq = np.asarray(exp_Iq, dtype=float)
+    bkg_Iq = np.asarray(bkg_Iq, dtype=float)
+
+    # Verify that the background shares the sample's q-axis (the normal case
+    # when both come from the same integration setup). If the q-axes differ we
+    # do NOT stop the calculation — we warn the user and proceed, leaving the
+    # decision of whether the result is trustworthy to them.
+    have_real_bkg = np.any(bkg_Iq != 0.0)
+    bkg_use_own_q = False   # interpolate the background from its own q-axis?
+
+    if have_real_bkg:
+        if bkg_q is not None:
+            bkg_q = np.asarray(bkg_q, dtype=float)
+            same_length = (len(bkg_q) == len(exp_q))
+
+            if same_length:
+                max_abs_diff = float(np.max(np.abs(bkg_q - exp_q)))
+                exact = np.allclose(bkg_q, exp_q, rtol=0.0, atol=0.0)
+                tiny = np.allclose(bkg_q, exp_q, rtol=1e-5, atol=1e-6)
+
+                if not tiny:
+                    # Genuinely different q grid. Warn, but continue by
+                    # interpolating the background onto the common grid using
+                    # its own q-axis.
+                    bkg_use_own_q = True
+                    _msg = (
+                        "The sample and background q-axes are different "
+                        f"(largest q difference = {max_abs_diff:.6g}). "
+                        "Background subtraction normally requires the sample "
+                        "and background to share the same q values. The "
+                        "calculation will still proceed by interpolating the "
+                        "background onto the sample q-grid, but please check "
+                        "whether the result is meaningful."
+                    )
+                    _warn_once(_msg)
+                elif not exact:
+                    # Values match only to within rounding: proceed, but note
+                    # the small difference.
+                    _msg = (
+                        "The sample and background q-axes are not exactly "
+                        f"equal; they differ by up to {max_abs_diff:.3g} in q. "
+                        "Proceeding with subtraction on the shared q-grid."
+                    )
+                    _warn_once(_msg)
+            else:
+                # Different number of points. Warn and continue using the
+                # background's own q-axis for interpolation.
+                bkg_use_own_q = True
+                _msg = (
+                    "The sample and background have different numbers of "
+                    f"points (sample: {len(exp_q)}, background: "
+                    f"{len(bkg_Iq)}). Background subtraction normally requires "
+                    "the same q values. The calculation will still proceed by "
+                    "interpolating the background onto the sample q-grid, but "
+                    "please check whether the result is meaningful."
+                )
+                _warn_once(_msg)
+        else:
+            # No background q-axis available.
+            if len(bkg_Iq) != len(exp_q):
+                # Cannot align without a q-axis; warn and skip the background
+                # rather than crashing.
+                _msg = (
+                    "The background has a different number of points from the "
+                    f"sample (sample: {len(exp_q)}, background: {len(bkg_Iq)}) "
+                    "and no background q-axis is available, so it cannot be "
+                    "aligned. The background will be ignored for this "
+                    "calculation."
+                )
+                _warn_once(_msg)
+                have_real_bkg = False
+                bkg_Iq = np.zeros_like(exp_Iq)
+
     # q-grid 구성 및 데이터 보간
     q_range = np.arange(qmin, qmax, qstep)
 
-    # exp_q 기준으로 보간
     scaled_expIq = np.interp(q_range, exp_q, exp_Iq)
-    scaled_bkgIq = np.interp(q_range, exp_q, bkg_Iq)
+    if have_real_bkg:
+        if bkg_use_own_q and bkg_q is not None:
+            # q-axes differ: interpolate the background from its own q-axis.
+            scaled_bkgIq = np.interp(q_range, bkg_q, bkg_Iq)
+        else:
+            # Shared q-axis: interpolate from the sample q-axis.
+            scaled_bkgIq = np.interp(q_range, exp_q, bkg_Iq)
+    else:
+        scaled_bkgIq = np.zeros_like(q_range)
 
     list_scaled_bkgIq = background_scale * scaled_bkgIq
     list_Iq = scaled_expIq - list_scaled_bkgIq
