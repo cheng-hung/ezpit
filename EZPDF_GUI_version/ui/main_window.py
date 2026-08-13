@@ -501,7 +501,7 @@ class PDFApp(QMainWindow):
     def show_about_dialog(self):
         # About Dialog Text - 프로그램 정보 텍스트
         about_text = """
-        <b>EZPDF (Easy(EZ) Pair Distribution Function (PDF) Version 0.1, January 7, 2026)</b>
+        <b>EZPDF (Easy(EZ) Pair Distribution Function (PDF) Version 1.0.2, August 4, 2026)</b>
         <p>: An easy-to-use software developed by the NSLS-II team for processing X-ray
         diffraction/scattering data and generating pair distribution function (PDF) spectra.</p>
 
@@ -651,7 +651,7 @@ class PDFApp(QMainWindow):
     def select_files(self):
         # Select individual files - 개별 파일들을 선택합니다.
         file_filter = (
-            "All Supported Files (*.sq *.fq *.iq *.chi *.gr *.xyz *.calsq *.calfq *.caliq *.calgr *.compton);;"
+            "All Supported Files (*.sq *.fq *.iq *.chi *.xy *.dat *.txt *.gr *.xyz *.calsq *.calfq *.caliq *.calgr *.compton);;"
             "All Files (*)"
         )
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self._last_dir, file_filter)

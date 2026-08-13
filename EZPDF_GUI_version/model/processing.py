@@ -71,9 +71,14 @@ def get_expSq(exp_data, control_panel, multiple_graphs=False):
     if background_enabled and background_path and not multiple_graphs:
         bkg_x, bkg_y = extract_data(background_path)
 
-    # 원소별 조성량(atom_weights)을 직접 넘겨 <f>, <f^2>를 가중 평균으로 계산
+    # 원소별 조성량(atom_weights)을 직접 넘겨 <f>, <f^2>를 가중 평균으로 계산.
+    # 배경은 [bkg_x, bkg_y] 형태로 넘겨, 샘플과 배경의 점 개수나 q 범위가 달라도
+    # cal_expSq가 각자의 q축으로 올바르게 보간하도록 한다. (예전에는 bkg_y만
+    # 넘겨서 두 파일 길이가 다르면 "fp and xp are not of the same length"
+    # 오류가 났다.)
+    bkg_arg = [bkg_x, bkg_y] if bkg_y is not None else None
     res = cal_expSq(
-        atom_indices, scattering_factors, exp_data, bkg_y,
+        atom_indices, scattering_factors, exp_data, bkg_arg,
         qmin, qmax, q_step, background_scale, poly_order, True,
         composition_weights=atom_weights
     )
@@ -112,10 +117,17 @@ def get_smooth_whittaker(y, control_panel):
 
 
 def get_xyz_graphs(atom_names, atom_positions, control_panel):
-    atom_indices = group_atoms(atom_names)[2]
+    # cal_Sq() looks scattering factors up by *unique-element* index
+    # (atom_indices maps each atom to its element in unique_atom_names), so the
+    # scattering-factor table must have one row per unique element in that same
+    # order. Passing the full per-atom list here would return one row per atom
+    # and the unique-index lookup would then read the wrong rows, assigning the
+    # wrong form factor to any element whose first appearance in the file does
+    # not line up with its unique index (e.g. O and I getting C's form factor).
+    unique_atom_names, _, atom_indices = group_atoms(atom_names)
     cal_parameters = control_panel.get_cal_parameters()
     atom_distance_matrix = create_atom_distance_matrix(atom_positions)
-    scattering_factors = get_aff_scattering_factors(atom_names)
+    scattering_factors = get_aff_scattering_factors(unique_atom_names)
     qmin = float(cal_parameters['qmin'])
     qmax = float(cal_parameters['qmax'])
     qstep = float(cal_parameters.get('qstep', 0.05))
